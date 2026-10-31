@@ -52,5 +52,10 @@
         <key>UISceneConfigurations</key>
         <dict/>
     </dict>
+    <!-- 音声入力用の権限 -->
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>音声をテキストに変換してチャットに入力するために音声認識を使用します。</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>音声入力機能を使用するためにマイクへのアクセスが必要です。</string>
 </dict>
 </plist>

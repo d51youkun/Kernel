@@ -1,0 +1,68 @@
+name: Release IPA
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Generate Xcode project
+        run: |
+          chmod +x .tools/xcodegen/bin/xcodegen
+          .tools/xcodegen/bin/xcodegen generate
+      
+      - name: Build IPA
+        run: |
+          xcodebuild -project Kernel.xcodeproj \
+            -scheme Kernel \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Kernel.xcarchive \
+            archive
+          
+          xcodebuild -exportArchive \
+            -archivePath build/Kernel.xcarchive \
+            -exportPath build \
+            -exportOptionsPlist ExportOptions.plist
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/Kernel.ipa
+          body: |
+            ## Kernel v${{ github.ref_name }}
+            
+            iPad用ローカルAIチャットアプリ
+            
+            ### 主な機能
+            - 🤖 llama.cppベースのローカルAI推論
+            - 🎨 iPad ChatGPT風のモダンUI
+            - 🗣️ 音声入力対応
+            - 🇯🇵 日本語出力強制
+            - 📊 トークン統計表示
+            - 👍👎 フィードバック機能
+            - 📅 日付別会話グループ化
+            - 🗄️ アーカイブ機能
+            
+            ### インストール方法
+            1. IPAファイルをダウンロード
+            2. AltStore/SideloadlyでiPadにインストール
+            3. 設定 > 一般 > VPNとデバイス管理で証明書を信頼
+            
+            ### 必要な権限
+            - マイク使用許可（音声入力用）
+            - 音声認識許可（音声入力用）
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
