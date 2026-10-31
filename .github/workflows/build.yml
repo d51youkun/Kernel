@@ -42,6 +42,7 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild build \
             -project KernelApp.xcodeproj \
             -scheme KernelApp \
@@ -51,7 +52,14 @@ jobs:
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+
+      # 失敗したとき、error の行だけをログ末尾に出す (コピー用)
+      - name: Show compile errors
+        if: failure()
+        run: |
+          grep -n "error:" build.log | head -50 || echo "no error lines found"
 
       - name: Sign & Package IPA
         run: |
