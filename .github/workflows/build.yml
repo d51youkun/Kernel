@@ -43,6 +43,16 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
+          # Swift マクロをコマンドラインビルドで動かすため
+          # macOS プラットフォームのプラグイン dylib を直接ロードする (Xcode 26 対応)
+          DEVDIR=$(xcode-select -p)
+          MACRO_DIR="${DEVDIR}/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
+          MACRO_FLAGS=""
+          for lib in libSwiftUIMacros libObservationMacros libFoundationMacros libSwiftDataMacros; do
+            f="${MACRO_DIR}/${lib}.dylib"
+            [ -f "$f" ] && MACRO_FLAGS="${MACRO_FLAGS} -load-plugin-library ${f}"
+          done
+
           xcodebuild build \
             -project KernelApp.xcodeproj \
             -scheme KernelApp \
@@ -53,6 +63,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            ${MACRO_FLAGS:+OTHER_SWIFT_FLAGS="$MACRO_FLAGS"} \
             2>&1 | tee build.log
 
       # 失敗したとき、error の行だけをログ末尾に出す (コピー用)
@@ -66,7 +77,9 @@ jobs:
           APP="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
           test -d "$APP" || (echo "Kernel.app not found" && exit 1)
           xattr -rc "$APP"
-          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP"
+          # ldid で擬似署名 (get-task-allow を保持、sideload 対応)
+          brew install ldid
+          ldid -S KernelApp/KernelApp.entitlements "$APP/Kernel"
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -qr Kernel.ipa Payload/
@@ -80,3 +93,13 @@ jobs:
           path: Kernel.ipa
           if-no-files-found: error
           retention-days: 90
+
+      # YouTubePlus 方式: ビルド成功時に自動で Release に IPA を添付する
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Kernel build #${{ github.run_number }}"
+          files: Kernel.ipa
+          draft: false
+        continue-on-error: true
