@@ -1,0 +1,74 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  LLAMA_VERSION: b12020
+
+jobs:
+  build:
+    name: 🔨 Build & Package IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Download llama.xcframework
+        run: |
+          if [ ! -d "Frameworks/llama.xcframework" ]; then
+            mkdir -p Frameworks
+            curl -fL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_VERSION}/llama-${LLAMA_VERSION}-xcframework.zip" \
+              -o Frameworks/llama-xcframework.zip
+            unzip -q Frameworks/llama-xcframework.zip -d Frameworks/
+            # zip の中の llama.xcframework を Frameworks/ 直下にそろえる
+            if [ -d "Frameworks/build-apple/llama.xcframework" ]; then
+              rm -rf Frameworks/llama.xcframework
+              mv Frameworks/build-apple/llama.xcframework Frameworks/
+            fi
+            rm -rf Frameworks/build-apple Frameworks/llama-xcframework.zip
+          fi
+          test -d Frameworks/llama.xcframework/ios-arm64 || (echo "xcframework not found" && exit 1)
+
+      - name: Generate Xcode Project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project KernelApp.xcodeproj \
+            -scheme KernelApp \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./build/DerivedData \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Sign & Package IPA
+        run: |
+          APP="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
+          test -d "$APP" || (echo "Kernel.app not found" && exit 1)
+          xattr -rc "$APP"
+          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr Kernel.ipa Payload/
+          rm -rf Payload
+          echo "✅ $(du -sh Kernel.ipa)"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-IPA-${{ github.run_number }}
+          path: Kernel.ipa
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,10 @@
+# ビルド生成物
+Frameworks/
+build/
+.tools/
+*.ipa
+Payload/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.DS_Store

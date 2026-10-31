@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  LLAMA_VERSION: b12020
+
+jobs:
+  release:
+    name: 🚀 Build & Release IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Download llama.xcframework
+        run: |
+          mkdir -p Frameworks
+          curl -fL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_VERSION}/llama-${LLAMA_VERSION}-xcframework.zip" \
+            -o Frameworks/llama-xcframework.zip
+          unzip -q Frameworks/llama-xcframework.zip -d Frameworks/
+          if [ -d "Frameworks/build-apple/llama.xcframework" ]; then
+            rm -rf Frameworks/llama.xcframework
+            mv Frameworks/build-apple/llama.xcframework Frameworks/
+          fi
+          rm -rf Frameworks/build-apple Frameworks/llama-xcframework.zip
+
+      - name: Generate Xcode Project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project KernelApp.xcodeproj \
+            -scheme KernelApp \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./build/DerivedData \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Sign & Package IPA
+        run: |
+          APP="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
+          test -d "$APP" || (echo "Kernel.app not found" && exit 1)
+          xattr -rc "$APP"
+          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr Kernel.ipa Payload/
+          rm -rf Payload
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Kernel $TAG" \
+            --notes "iPad用ローカルAIチャット Kernel のリリースです。
+
+          ## インストール方法
+          1. 下の \`Kernel.ipa\` をダウンロード
+          2. AltStore / Sideloadly / Xcode で iPad にインストール
+          3. 設定 → 一般 → VPNとデバイス管理 で証明書を信頼
+          4. アプリ内の JIT設定 で JIT を有効化 (StikJIT などが必要)
+
+          ## モデルの入れ方
+          1. Hugging Face などから GGUF モデルをダウンロード (例: Qwen3-1.7B の Q4_K_M)
+          2. ファイルアプリで Kernel の Documents/Models/ に保存
+          3. 設定 → モデル で選択" \
+            Kernel.ipa
