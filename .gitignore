@@ -1,0 +1,14 @@
+# Build & temporary artifacts
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+.DS_Store
+.tools/
+
+# Large prebuilt frameworks (auto-downloaded by build_ipa.sh & GitHub Actions)
+Frameworks/

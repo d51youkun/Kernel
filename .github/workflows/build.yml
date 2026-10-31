@@ -1,0 +1,71 @@
+name: Build IPA
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  SCHEME: KernelApp
+  PROJECT: KernelApp.xcodeproj
+
+jobs:
+  build:
+    name: 🔨 Build & Package IPA
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Download llama.xcframework
+        run: |
+          if [ ! -d "Frameworks/llama.xcframework" ]; then
+            mkdir -p Frameworks
+            curl -L https://github.com/ggml-org/llama.cpp/releases/download/b10549/llama-b10549-xcframework.zip -o Frameworks/llama-xcframework.zip
+            unzip -q Frameworks/llama-xcframework.zip -d Frameworks/
+            mv Frameworks/build-apple/llama.xcframework Frameworks/
+            rm -rf Frameworks/build-apple Frameworks/llama-xcframework.zip
+          fi
+
+      - name: Generate Xcode Project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build Application
+        run: |
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./build/DerivedData \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Sign with StickJIT Entitlements & Package IPA
+        run: |
+          APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
+          xattr -rc "$APP_PATH"
+          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP_PATH"
+          
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr Kernel.ipa Payload/
+          rm -rf Payload
+          echo "✅ Generated Kernel.ipa:"
+          ls -lh Kernel.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-IPA-${{ github.run_number }}
+          path: Kernel.ipa
+          if-no-files-found: error
+          retention-days: 30
