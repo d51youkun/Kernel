@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.kernel
   deploymentTarget:
     iOS: "17.0"
-  xcodeVersion: "16.0"
+  xcodeVersion: "15.0"
   createIntermediateGroups: true
   indentWidth: 4
   tabWidth: 4

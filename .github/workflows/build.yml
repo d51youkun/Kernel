@@ -21,6 +21,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Select Xcode Version
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XCODE_APP" ]; then
+            XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          echo "Selected Xcode: $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
