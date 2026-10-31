@@ -1,51 +1,33 @@
-// LlamaBridge.mm
-// llama.cpp C API の Objective-C++ ラッパー実装
-// StickJIT によって JIT が許可された後、llama.cpp は MAP_JIT メモリを活用する
-
 #import "LlamaBridge.h"
 
-// llama.cpp SPM パッケージからのインポート
-// Xcode が SPM の include パスを自動解決する
 #include <llama.h>
-
 #include <atomic>
 #include <string>
 #include <vector>
 #include <cstring>
 
-// ─────────────────────────────────────────────
-// MARK: - エラードメイン
-// ─────────────────────────────────────────────
-
 static NSErrorDomain const LlamaErrorDomain = @"com.kernel.LlamaError";
 typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
-    LlamaErrorModelLoad   = 100,
+    LlamaErrorModelLoad = 100,
     LlamaErrorContextInit = 101,
-    LlamaErrorTokenize    = 102,
-    LlamaErrorDecode      = 103,
-    LlamaErrorNoModel     = 104,
+    LlamaErrorTokenize = 102,
+    LlamaErrorDecode = 103,
+    LlamaErrorNoModel = 104,
 };
 
-// ─────────────────────────────────────────────
-// MARK: - LlamaBridge 実装
-// ─────────────────────────────────────────────
-
 @implementation LlamaBridge {
-    llama_model   *_model;
+    llama_model *_model;
     llama_context *_ctx;
-    dispatch_queue_t _genQueue;       // 生成専用シリアルキュー
+    dispatch_queue_t _genQueue;
     std::atomic<bool> _shouldCancel;
 
-    // パラメータ
     int32_t _contextLength;
     int32_t _nGpuLayers;
-    float   _temperature;
+    float _temperature;
     int32_t _topK;
-    float   _topP;
+    float _topP;
     int32_t _maxNewTokens;
 }
-
-// ── バックエンド ──────────────────────────────
 
 + (void)initializeBackend {
     llama_backend_init();
@@ -55,21 +37,18 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     llama_backend_free();
 }
 
-// ── 初期化・解放 ────────────────────────────
-
 - (instancetype)init {
     if (self = [super init]) {
-        _model          = nullptr;
-        _ctx            = nullptr;
-        _genQueue       = dispatch_queue_create("com.kernel.llama.gen",
-                                                DISPATCH_QUEUE_SERIAL);
-        _shouldCancel   = false;
-        _contextLength  = 4096;
-        _nGpuLayers     = 99;   // 全レイヤーを Metal GPU に
-        _temperature    = 0.80f;
-        _topK           = 40;
-        _topP           = 0.95f;
-        _maxNewTokens   = 1024;
+        _model = nullptr;
+        _ctx = nullptr;
+        _genQueue = dispatch_queue_create("com.kernel.llama.gen", DISPATCH_QUEUE_SERIAL);
+        _shouldCancel = false;
+        _contextLength = 4096;
+        _nGpuLayers = 99;
+        _temperature = 0.80f;
+        _topK = 40;
+        _topP = 0.95f;
+        _maxNewTokens = 1024;
     }
     return self;
 }
@@ -78,21 +57,57 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     [self unloadModel];
 }
 
-// ── プロパティ ──────────────────────────────
+- (BOOL)isModelLoaded {
+    return _model != nullptr;
+}
 
-- (BOOL)isModelLoaded   { return _model != nullptr; }
-- (int32_t)contextLength  { return _contextLength; }
-- (void)setContextLength:(int32_t)v  { _contextLength = v; }
-- (int32_t)nGpuLayers   { return _nGpuLayers; }
-- (void)setNGpuLayers:(int32_t)v    { _nGpuLayers = v; }
-- (float)temperature    { return _temperature; }
-- (void)setTemperature:(float)v     { _temperature = v; }
-- (int32_t)topK         { return _topK; }
-- (void)setTopK:(int32_t)v          { _topK = v; }
-- (float)topP           { return _topP; }
-- (void)setTopP:(float)v            { _topP = v; }
-- (int32_t)maxNewTokens { return _maxNewTokens; }
-- (void)setMaxNewTokens:(int32_t)v  { _maxNewTokens = v; }
+- (int32_t)contextLength {
+    return _contextLength;
+}
+
+- (void)setContextLength:(int32_t)v {
+    _contextLength = v;
+}
+
+- (int32_t)nGpuLayers {
+    return _nGpuLayers;
+}
+
+- (void)setNGpuLayers:(int32_t)v {
+    _nGpuLayers = v;
+}
+
+- (float)temperature {
+    return _temperature;
+}
+
+- (void)setTemperature:(float)v {
+    _temperature = v;
+}
+
+- (int32_t)topK {
+    return _topK;
+}
+
+- (void)setTopK:(int32_t)v {
+    _topK = v;
+}
+
+- (float)topP {
+    return _topP;
+}
+
+- (void)setTopP:(float)v {
+    _topP = v;
+}
+
+- (int32_t)maxNewTokens {
+    return _maxNewTokens;
+}
+
+- (void)setMaxNewTokens:(int32_t)v {
+    _maxNewTokens = v;
+}
 
 - (nullable NSString *)modelDescription {
     if (!_model) return nil;
@@ -101,12 +116,9 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     return [NSString stringWithUTF8String:buf];
 }
 
-// ── モデルロード ────────────────────────────
-
 - (BOOL)loadModelFromPath:(NSString *)path error:(NSError **)error {
     [self unloadModel];
 
-    // モデルパラメータ
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = _nGpuLayers;
 
@@ -122,9 +134,8 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
         return NO;
     }
 
-    // コンテキストパラメータ
     llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx   = (uint32_t)_contextLength;
+    cparams.n_ctx = (uint32_t)_contextLength;
     cparams.n_batch = 512;
 
     _ctx = llama_new_context_with_model(_model, cparams);
@@ -145,15 +156,19 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
 
 - (void)unloadModel {
     _shouldCancel = true;
-    // キューの完了を待つ
-    dispatch_sync(_genQueue, ^{});
+    dispatch_sync(_genQueue, ^{
+    });
     _shouldCancel = false;
 
-    if (_ctx)   { llama_free(_ctx);        _ctx   = nullptr; }
-    if (_model) { llama_model_free(_model); _model = nullptr; }
+    if (_ctx) {
+        llama_free(_ctx);
+        _ctx = nullptr;
+    }
+    if (_model) {
+        llama_model_free(_model);
+        _model = nullptr;
+    }
 }
-
-// ── 生成 ──────────────────────────────────
 
 - (void)cancelGeneration {
     _shouldCancel = true;
@@ -179,15 +194,11 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
 - (void)_generateFromMessages:(NSArray<NSDictionary<NSString *, NSString *> *> *)messages
                      callback:(LlamaTokenCallback)callback {
 
-    // ────────────────────────────────────────
-    // 1. チャットテンプレートを適用してプロンプトを生成
-    // ────────────────────────────────────────
     std::string prompt;
     const struct llama_vocab *vocab = llama_model_get_vocab(_model);
 
-    // llama_chat_apply_template でモデル埋め込みテンプレートを使う
     std::vector<llama_chat_message> chatMsgs;
-    std::vector<std::string>        roles, contents;
+    std::vector<std::string> roles, contents;
 
     for (NSDictionary<NSString *, NSString *> *msg in messages) {
         roles.push_back(std::string([msg[@"role"] UTF8String]));
@@ -195,12 +206,11 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     }
     for (size_t i = 0; i < roles.size(); i++) {
         llama_chat_message m;
-        m.role    = roles[i].c_str();
+        m.role = roles[i].c_str();
         m.content = contents[i].c_str();
         chatMsgs.push_back(m);
     }
 
-    // テンプレート適用（バッファが足りなければリトライ）
     const char *tmpl = llama_model_chat_template(_model, nullptr);
     int32_t bufLen = 8192;
     std::vector<char> tmplBuf(bufLen);
@@ -222,7 +232,6 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     if (needed > 0) {
         prompt = std::string(tmplBuf.data(), (size_t)needed);
     } else {
-        // フォールバック: ChatML 形式
         prompt.clear();
         for (size_t i = 0; i < chatMsgs.size(); i++) {
             std::string role(chatMsgs[i].role);
@@ -238,9 +247,6 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
         prompt += "<|im_start|>assistant\n";
     }
 
-    // ────────────────────────────────────────
-    // 2. トークナイズ
-    // ────────────────────────────────────────
     int32_t nCtx = (int32_t)llama_n_ctx(_ctx);
     std::vector<llama_token> tokens(nCtx);
 
@@ -248,7 +254,7 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
         vocab,
         prompt.c_str(), (int32_t)prompt.size(),
         tokens.data(), (int32_t)tokens.size(),
-        /*add_special=*/true, /*parse_special=*/true
+        true, true
     );
     if (nTokens < 0) {
         callback(nil, YES,
@@ -259,9 +265,6 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
     }
     tokens.resize(nTokens);
 
-    // ────────────────────────────────────────
-    // 3. KVキャッシュをクリアしてプロンプトをデコード
-    // ────────────────────────────────────────
     llama_memory_clear(llama_get_memory(_ctx), true);
 
     llama_batch batch = llama_batch_get_one(tokens.data(), (int32_t)tokens.size());
@@ -273,39 +276,29 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
         return;
     }
 
-    // ────────────────────────────────────────
-    // 4. サンプラー設定
-    // ────────────────────────────────────────
     llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(_topK));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_p(_topP, 1));
     llama_sampler_chain_add(smpl, llama_sampler_init_temp(_temperature));
     llama_sampler_chain_add(smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
-    // ────────────────────────────────────────
-    // 5. 生成ループ
-    // ────────────────────────────────────────
-    int32_t nCur      = nTokens;
+    int32_t nCur = nTokens;
     int32_t remaining = _maxNewTokens;
 
-    // UTF-8 のマルチバイト文字対応バッファ
     std::string utf8Buf;
 
     while (nCur < nCtx && remaining > 0 && !_shouldCancel.load()) {
         llama_token token = llama_sampler_sample(smpl, _ctx, -1);
 
-        // EOS / EOT チェック
         if (llama_vocab_is_eog(vocab, token)) {
             break;
         }
 
-        // トークン → 文字列
         char pieceBuf[256] = {0};
         int32_t pieceLen = llama_token_to_piece(vocab, token,
                                                  pieceBuf, (int32_t)sizeof(pieceBuf) - 1,
                                                  0, false);
         if (pieceLen < 0) {
-            // バッファ不足（まれ）
             std::vector<char> bigBuf(-pieceLen + 1, 0);
             pieceLen = llama_token_to_piece(vocab, token,
                                              bigBuf.data(), (int32_t)bigBuf.size() - 1,
@@ -317,15 +310,12 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
             utf8Buf.append(pieceBuf, (size_t)pieceLen);
         }
 
-        // UTF-8 が完全な文字を含むなら Swift に送信
         NSString *piece = [NSString stringWithUTF8String:utf8Buf.c_str()];
         if (piece) {
             callback(piece, NO, nil);
             utf8Buf.clear();
         }
-        // 不完全な場合はバッファに貯めて次ループへ
 
-        // 次トークンをデコード
         batch = llama_batch_get_one(&token, 1);
         if (llama_decode(_ctx, batch) != 0) break;
 
@@ -333,7 +323,6 @@ typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
         remaining--;
     }
 
-    // 残バッファを送信（UTF-8 が中途半端な場合は Latin-1 で送る）
     if (!utf8Buf.empty()) {
         NSString *rest = [NSString stringWithUTF8String:utf8Buf.c_str()];
         if (!rest) {

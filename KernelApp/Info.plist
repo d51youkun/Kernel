@@ -22,12 +22,10 @@
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
-    <!-- iPad only -->
     <key>UIDeviceFamily</key>
     <array>
         <integer>2</integer>
     </array>
-    <!-- Files.app 連携：GGUF インポート用 -->
     <key>UIFileSharingEnabled</key>
     <true/>
     <key>LSSupportsOpeningDocumentsInPlace</key>
@@ -52,7 +50,6 @@
         <key>UISceneConfigurations</key>
         <dict/>
     </dict>
-    <!-- 音声入力用の権限 -->
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>音声をテキストに変換してチャットに入力するために音声認識を使用します。</string>
     <key>NSMicrophoneUsageDescription</key>

@@ -1,5 +1,3 @@
-// ChatViewModel.swift
-
 import Foundation
 import SwiftUI
 import AVFoundation
@@ -13,13 +11,11 @@ final class ChatViewModel: ObservableObject {
     @Published var loadingModelName: String?
     @Published var errorMessage: String?
     @Published var searchQuery: String = ""
-    /// 生成後の外国語検出警告（nil なら問題なし）
     @Published var foreignLanguageWarning: String?
 
     private let llama = LlamaService.shared
     private var settingsRef: AppSettings { AppSettings.shared }
     private var tts = AVSpeechSynthesizer()
-    // 生成タスク参照（キャンセル用）
     private var generationTask: Task<Void, Never>?
 
     private let storageURL: URL = {
@@ -38,7 +34,7 @@ final class ChatViewModel: ObservableObject {
 
     init() { loadFromDisk() }
 
-    // ── 会話管理 ────────────────────────────────────
+    // MARK: - Conversation Management
 
     func newConversation(modelId: UUID?) {
         let conv = Conversation(modelId: modelId)
@@ -48,7 +44,6 @@ final class ChatViewModel: ObservableObject {
     }
 
     func selectConversation(_ conv: Conversation) {
-        // 別会話への切り替え時は生成を停止
         if currentConversation?.id != conv.id { stopGeneration() }
         currentConversation = conv
     }
@@ -85,7 +80,7 @@ final class ChatViewModel: ObservableObject {
         saveToDisk()
     }
 
-    // ── アーカイブ ──────────────────────────────────
+    // MARK: - Archive
 
     func archiveConversation(_ conv: Conversation) {
         guard let idx = conversations.firstIndex(where: { $0.id == conv.id }) else { return }
@@ -103,20 +98,18 @@ final class ChatViewModel: ObservableObject {
         saveToDisk()
     }
 
-    // ── メッセージフィードバック ────────────────────
+    // MARK: - Feedback
 
     func setFeedback(for messageId: UUID, feedback: Message.Feedback) {
         guard var conv = currentConversation,
               let idx = conv.messages.firstIndex(where: { $0.id == messageId }) else { return }
-        // トグル: 同じフィードバックなら解除
         conv.messages[idx].feedback = conv.messages[idx].feedback == feedback ? .none : feedback
         updateCurrent(conv)
         saveToDisk()
     }
 
-    // ── トークン統計 ────────────────────────────────
+    // MARK: - Token Statistics
 
-    /// 最後のアシスタントメッセージの統計情報
     var lastResponseStats: (tokens: Int, duration: Double, tokensPerSec: Double)? {
         guard let conv = currentConversation,
               let last = conv.messages.last(where: { $0.role == .assistant }),
@@ -125,7 +118,7 @@ final class ChatViewModel: ObservableObject {
         return (tokens, duration, Double(tokens) / duration)
     }
 
-    // ── 検索 ────────────────────────────────────────
+    // MARK: - Search & Filtering
 
     var filteredConversations: [Conversation] {
         let nonArchived = conversations.filter { !$0.isArchived }
@@ -147,7 +140,6 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// 会話を日付グループで分類（サイドバー用）
     var conversationsByDate: [(String, [Conversation])] {
         let nonArchived = filteredConversations
         let calendar = Calendar.current
@@ -184,7 +176,7 @@ final class ChatViewModel: ObservableObject {
         return groups
     }
 
-    // ── 添付ファイル ────────────────────────────────
+    // MARK: - Attachments
 
     func importAttachment(from url: URL) throws -> AttachedFile {
         let accessing = url.startAccessingSecurityScopedResource()
@@ -207,7 +199,7 @@ final class ChatViewModel: ObservableObject {
         )
     }
 
-    // ── メッセージ操作 ──────────────────────────────
+    // MARK: - Message Operations
 
     func editAndResend(messageId: UUID, newContent: String, with model: ModelEntry) async {
         guard var conv = currentConversation,
@@ -238,11 +230,10 @@ final class ChatViewModel: ObservableObject {
 
     func stopSpeaking() { tts.stopSpeaking(at: .immediate) }
 
-    // ── 送信 ────────────────────────────────────────
+    // MARK: - Send Message
 
     func sendMessage(_ text: String, attachments: [AttachedFile] = [], with model: ModelEntry) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // 添付なし & 空テキストはスキップ
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
         guard !isGenerating else { return }
 
@@ -252,19 +243,16 @@ final class ChatViewModel: ObservableObject {
         if currentConversation == nil { newConversation(modelId: model.id) }
         guard var conv = currentConversation else { return }
 
-        // ユーザーメッセージ
         var userMsg = Message(role: .user, content: trimmed)
         userMsg.attachments = attachments
         conv.messages.append(userMsg)
         conv.updatedAt = Date()
         if conv.messages.filter({ $0.role == .user }).count == 1 { conv.autoTitle() }
 
-        // アシスタントプレースホルダー
         conv.messages.append(Message(role: .assistant, content: ""))
         updateCurrent(conv)
         isGenerating = true
 
-        // モデルロード
         do {
             loadingModelName = model.displayName
             try await llama.loadModel(model)
@@ -277,11 +265,6 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        // システムプロンプト構築
-        // 多層日本語強制：
-        //  1. system ロール（ChatML対応モデル用）
-        //  2. 最初の user メッセージに埋め込み（system無視モデル用）
-        //  3. 各 user メッセージ末尾にリマインダー付加（最強）
         var msgParams: [[String: String]] = []
 
         let jpInstruction = """
@@ -303,14 +286,12 @@ final class ChatViewModel: ObservableObject {
         let userSP = settingsRef.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if settingsRef.forceJapanese {
-            // system ロール（ChatML, Llama-3, Mistral 等に対応）
             let sysBody = [jpInstruction, userSP].filter { !$0.isEmpty }.joined(separator: "\n\n")
             msgParams.append(["role": "system", "content": sysBody])
         } else if !userSP.isEmpty {
             msgParams.append(["role": "system", "content": userSP])
         }
 
-        // メッセージ履歴（添付テキストを末尾に付加）
         let history = (currentConversation?.messages ?? []).dropLast().filter { $0.role != .system }
         var historyParams: [[String: String]] = history.map { msg -> [String: String] in
             var content = msg.content
@@ -327,9 +308,6 @@ final class ChatViewModel: ObservableObject {
         }
 
         if settingsRef.forceJapanese {
-            // user メッセージ全件に日本語リマインダーを付加
-            // 最初のメッセージ：指示を先頭に埋め込み（system無視モデル対策）
-            // 以降のメッセージ：末尾に短いリマインダー
             let reminder = "\n\n※必ず日本語で回答してください。英語での回答は禁止です。"
             let firstInject = "\(jpInstruction)\n\n"
 
@@ -337,10 +315,8 @@ final class ChatViewModel: ObservableObject {
                 guard param["role"] == "user" else { continue }
                 var content = param["content"] ?? ""
                 if i == historyParams.firstIndex(where: { $0["role"] == "user" }) {
-                    // 最初の user: 指示を先頭に
                     content = firstInject + content + reminder
                 } else {
-                    // それ以降の user: 末尾にリマインダー
                     content = content + reminder
                 }
                 historyParams[i]["content"] = content
@@ -349,7 +325,6 @@ final class ChatViewModel: ObservableObject {
 
         msgParams += historyParams
 
-        // 生成（タスクで管理してキャンセル可能に）
         let convId = conv.id
         generationTask = Task { [weak self] in
             guard let self else { return }
@@ -360,16 +335,14 @@ final class ChatViewModel: ObservableObject {
                 for try await piece in stream {
                     if Task.isCancelled { break }
                     fullContent += piece
-                    // 現在の会話IDが変わっていたら書き込みしない（別タスク混入防止）
                     guard var c = currentConversation,
                           c.id == convId,
                           let lastIdx = c.messages.indices.last else { continue }
                     c.messages[lastIdx].content = fullContent
                     updateCurrent(c)
                 }
-                // ── 生成統計を記録 ──
+
                 let genDuration = Date().timeIntervalSince(genStartTime)
-                // トークン数の概算: 日本語は約1.5文字/トークン、英語は約4文字/トークン
                 let estTokens = Int(Double(fullContent.count) / 2.0)
                 if var c = currentConversation, c.id == convId,
                    let lastIdx = c.messages.indices.last,
@@ -378,7 +351,7 @@ final class ChatViewModel: ObservableObject {
                     c.messages[lastIdx].estimatedTokens = estTokens
                     updateCurrent(c)
                 }
-                // ── 生成後の外国語検出 ──
+
                 if settingsRef.forceJapanese, !Task.isCancelled, !fullContent.isEmpty {
                     detectForeignLanguage(in: fullContent)
                 }
@@ -403,11 +376,9 @@ final class ChatViewModel: ObservableObject {
         isGenerating = false
     }
 
-    // ── 外国語検出 ────────────────────────────────────
+    // MARK: - Foreign Language Detection
 
-    /// 生成されたテキストが主に外国語（日本語以外）で書かれているか検出する
     private func detectForeignLanguage(in content: String) {
-        // コードブロックを除去（コード内は英語で正常）
         let stripped = content.replacingOccurrences(
             of: #"```[\s\S]*?```"#,
             with: " ",
@@ -418,30 +389,23 @@ final class ChatViewModel: ObservableObject {
             options: .regularExpression
         )
 
-        // 各文字種をカウント
         var japaneseCount = 0
         var latinCount = 0
         var totalLetters = 0
 
         for scalar in stripped.unicodeScalars {
             let v = scalar.value
-            // ひらがな U+3040-U+309F
             if v >= 0x3040 && v <= 0x309F { japaneseCount += 1; totalLetters += 1 }
-            // カタカナ U+30A0-U+30FF
             else if v >= 0x30A0 && v <= 0x30FF { japaneseCount += 1; totalLetters += 1 }
-            // 漢字 U+4E00-U+9FFF, U+3400-U+4DBF
             else if (v >= 0x4E00 && v <= 0x9FFF) || (v >= 0x3400 && v <= 0x4DBF) { japaneseCount += 1; totalLetters += 1 }
-            // ラテン文字 a-zA-Z
             else if (v >= 0x41 && v <= 0x5A) || (v >= 0x61 && v <= 0x7A) { latinCount += 1; totalLetters += 1 }
         }
 
-        // 文字が少なすぎる場合はスキップ
         guard totalLetters > 20 else { return }
 
         let jpRatio = Double(japaneseCount) / Double(totalLetters)
         let latinRatio = Double(latinCount) / Double(totalLetters)
 
-        // 日本語が30%未満でラテン文字が50%超 → 外国語の可能性が高い
         if jpRatio < 0.30 && latinRatio > 0.50 {
             foreignLanguageWarning = """
             回答が主に外国語（英語等）で書かれています。
@@ -452,7 +416,6 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// 最後のアシスタント回答を削除して、より強い日本語強制で再生成する
     func regenerateInJapanese(with model: ModelEntry) async {
         guard var conv = currentConversation,
               let lastAssistant = conv.messages.last(where: { $0.role == .assistant }),
@@ -465,11 +428,9 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    // ── HTML検出・保存 ──────────────────────────────
+    // MARK: - HTML Extraction
 
-    /// アシスタントの返答からHTMLを抽出して保存、URLを返す
     func extractAndSaveHTML(from content: String) -> URL? {
-        // ```html ... ``` を検出
         guard let re = try? NSRegularExpression(pattern: "```(?:html)?\\s*\\n([\\s\\S]*?)```",
                                                  options: .caseInsensitive),
               let match = re.firstMatch(in: content,
@@ -484,7 +445,7 @@ final class ChatViewModel: ObservableObject {
         return url
     }
 
-    // ── ソート ──────────────────────────────────────
+    // MARK: - Sorting
 
     private func sortConversations() {
         conversations.sort {
@@ -500,7 +461,7 @@ final class ChatViewModel: ObservableObject {
         currentConversation = conv
     }
 
-    // ── 永続化 ──────────────────────────────────────
+    // MARK: - Persistence
 
     func loadFromDisk() {
         guard let data = try? Data(contentsOf: storageURL),

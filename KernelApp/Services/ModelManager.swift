@@ -1,129 +1,98 @@
-// ModelManager.swift
-// GGUF ファイルの管理（スキャン・インポート・名前変更・削除）
-// Documents/Models/ を管理対象ディレクトリとする
-
 import Foundation
-import UniformTypeIdentifiers
 
 @MainActor
 final class ModelManager: ObservableObject {
     static let shared = ModelManager()
 
     @Published var models: [ModelEntry] = []
-    @Published var selectedModel: ModelEntry?
 
-    // メタデータ保存先
-    private let metaURL: URL = {
+    private let modelsDirectory: URL = {
+        FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Models")
+    }()
+
+    private let storageURL: URL = {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("models.json")
     }()
 
-    var modelsDirectory: URL {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Models")
-    }
-
     private init() {
-        try? FileManager.default.createDirectory(at: modelsDirectory,
-                                                 withIntermediateDirectories: true)
-        loadMetadata()
-        scanAndReconcile()
+        loadModels()
     }
 
-    // ── CRUD ──────────────────────────────────
+    func loadModels() {
+        try? FileManager.default.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
 
-    /// Files.app から GGUF ファイルをインポートする
-    func importModel(from sourceURL: URL) throws {
-        let accessing = sourceURL.startAccessingSecurityScopedResource()
-        defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
-
-        let destURL = modelsDirectory.appendingPathComponent(sourceURL.lastPathComponent)
-
-        // 既存ファイルは上書きしない
-        if FileManager.default.fileExists(atPath: destURL.path) {
-            throw CocoaError(.fileWriteFileExists)
+        guard let data = try? Data(contentsOf: storageURL),
+              let decoded = try? JSONDecoder().decode([ModelEntry].self, from: data) else {
+            scanModelsDirectory()
+            return
         }
 
-        try FileManager.default.copyItem(at: sourceURL, to: destURL)
-
-        let entry = ModelEntry(
-            displayName: sourceURL.deletingPathExtension().lastPathComponent,
-            fileName:    sourceURL.lastPathComponent
-        )
-        models.append(entry)
-        if selectedModel == nil { selectedModel = entry }
-        saveMetadata()
+        models = decoded
+        syncWithDirectory()
     }
 
-    /// 表示名を変更する
-    func rename(_ entry: ModelEntry, to newName: String) {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if let idx = models.firstIndex(where: { $0.id == entry.id }) {
-            models[idx].displayName = trimmed
-            if selectedModel?.id == entry.id { selectedModel = models[idx] }
-            saveMetadata()
-        }
-    }
+    func scanModelsDirectory() {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: modelsDirectory,
+                                                                       includingPropertiesForKeys: nil) else { return }
 
-    /// モデルとファイルを削除する
-    func delete(_ entry: ModelEntry) {
-        models.removeAll { $0.id == entry.id }
-        try? FileManager.default.removeItem(at: entry.fileURL)
-        if selectedModel?.id == entry.id {
-            selectedModel = models.first
-        }
-        saveMetadata()
-    }
+        let ggufFiles = files.filter { $0.pathExtension.lowercased() == "gguf" }
 
-    // ── スキャン ──────────────────────────────
-
-    /// Documents/Models/ 内の .gguf を走査してメタデータと突き合わせる
-    func scanAndReconcile() {
-        let contents = (try? FileManager.default
-            .contentsOfDirectory(at: modelsDirectory,
-                                  includingPropertiesForKeys: nil)) ?? []
-        let ggufFiles = contents.filter { $0.pathExtension.lowercased() == "gguf" }
-
-        // 新規発見ファイルを追加
         for file in ggufFiles {
             let fileName = file.lastPathComponent
             if !models.contains(where: { $0.fileName == fileName }) {
-                let entry = ModelEntry(
-                    displayName: file.deletingPathExtension().lastPathComponent,
-                    fileName: fileName
-                )
+                let entry = ModelEntry(displayName: fileName.replacingOccurrences(of: ".gguf", with: ""),
+                                       fileName: fileName)
                 models.append(entry)
             }
         }
 
-        // ファイルが消えたエントリを除去
-        models.removeAll { entry in
-            !FileManager.default.fileExists(atPath: entry.fileURL.path)
-        }
-
-        if selectedModel == nil || !models.contains(where: { $0.id == selectedModel?.id }) {
-            selectedModel = models.first
-        }
-
-        saveMetadata()
+        saveModels()
     }
 
-    // ── 永続化 ────────────────────────────────
+    func syncWithDirectory() {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: modelsDirectory,
+                                                                       includingPropertiesForKeys: nil) else { return }
 
-    private func loadMetadata() {
-        guard let data = try? Data(contentsOf: metaURL),
-              let decoded = try? JSONDecoder().decode([ModelEntry].self, from: data) else {
-            return
+        let fileNames = Set(files.map { $0.lastPathComponent })
+        models = models.filter { fileNames.contains($0.fileName) }
+
+        for file in files where file.pathExtension.lowercased() == "gguf" {
+            let fileName = file.lastPathComponent
+            if !models.contains(where: { $0.fileName == fileName }) {
+                let entry = ModelEntry(displayName: fileName.replacingOccurrences(of: ".gguf", with: ""),
+                                       fileName: fileName)
+                models.append(entry)
+            }
         }
-        models = decoded
-        selectedModel = models.first
+
+        saveModels()
     }
 
-    private func saveMetadata() {
+    func addModel(displayName: String, fileName: String) {
+        let entry = ModelEntry(displayName: displayName, fileName: fileName)
+        models.append(entry)
+        saveModels()
+    }
+
+    func deleteModel(_ model: ModelEntry) {
+        let fileURL = model.fileURL
+        try? FileManager.default.removeItem(at: fileURL)
+        models.removeAll { $0.id == model.id }
+        saveModels()
+    }
+
+    func renameModel(_ model: ModelEntry, to newDisplayName: String) {
+        guard let index = models.firstIndex(where: { $0.id == model.id }) else { return }
+        models[index].displayName = newDisplayName
+        saveModels()
+    }
+
+    private func saveModels() {
         guard let data = try? JSONEncoder().encode(models) else { return }
-        try? data.write(to: metaURL, options: .atomic)
+        try? data.write(to: storageURL, options: .atomic)
     }
 }

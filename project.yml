@@ -15,7 +15,6 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: KernelApp
-      - path: KernelApp/Assets.xcassets
     resources:
       - path: KernelApp/Assets.xcassets
     dependencies:

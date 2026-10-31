@@ -1,122 +1,105 @@
-// SpeechRecognitionService.swift
-// 音声認識サービス (SFSpeechRecognizer)
-
 import Foundation
 import Speech
 import AVFoundation
 
 @MainActor
-final class SpeechRecognitionService: ObservableObject {
+final class SpeechRecognitionService: NSObject, ObservableObject {
     static let shared = SpeechRecognitionService()
-    
-    @Published var isRecording = false
+
+    @Published var isListening = false
     @Published var recognizedText = ""
-    @Published var errorMessage: String?
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
-    
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ja-JP"))
+
+    private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private let audioEngine = AVAudioEngine()
-    
-    private init() {
-        checkAuthorization()
-    }
-    
-    // ── 権限確認 ──────────────────────────────────────
-    
-    func checkAuthorization() {
+    private var audioEngine = AVAudioEngine()
+
+    private override init() {
+        super.init()
+        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ja-JP"))
         authorizationStatus = SFSpeechRecognizer.authorizationStatus()
     }
-    
+
     func requestAuthorization() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+        SFSpeechRecognizer.requestAuthorization { status in
             Task { @MainActor in
-                self?.authorizationStatus = status
+                self.authorizationStatus = status
             }
         }
     }
-    
-    // ── 録音開始 ──────────────────────────────────────
-    
-    func startRecording() throws {
-        // 既存のタスクをキャンセル
-        stopRecording()
-        
-        // 権限チェック
-        guard authorizationStatus == .authorized else {
-            errorMessage = "音声認識の権限がありません。設定から許可してください。"
-            return
+
+    func startListening() throws {
+        guard let recognizer = recognizer, recognizer.isAvailable else {
+            throw SpeechError.recognizerUnavailable
         }
-        
-        guard let recognizer = speechRecognizer, recognizer.isAvailable else {
-            errorMessage = "音声認識が利用できません。"
-            return
-        }
-        
-        // オーディオセッション設定
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        
-        // 認識リクエスト
+
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest else {
-            errorMessage = "認識リクエストを作成できませんでした。"
-            return
+        guard let recognitionRequest = recognitionRequest else {
+            throw SpeechError.requestCreationFailed
         }
-        
+
         recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.requiresOnDeviceRecognition = false // オンライン認識
-        
-        // オーディオエンジン設定
+
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
-        
+
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
             recognitionRequest.append(buffer)
         }
-        
-        // 認識タスク開始
-        recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            guard let self else { return }
-            
+
+        audioEngine.prepare()
+        try audioEngine.start()
+
+        recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
             Task { @MainActor in
-                if let result {
+                if let error = error {
+                    self.stopListening()
+                    return
+                }
+
+                if let result = result {
                     self.recognizedText = result.bestTranscription.formattedString
                 }
-                
-                if error != nil || result?.isFinal == true {
-                    self.stopRecording()
+
+                if result?.isFinal == true {
+                    self.stopListening()
                 }
             }
         }
-        
-        audioEngine.prepare()
-        try audioEngine.start()
-        isRecording = true
-        recognizedText = ""
-        errorMessage = nil
+
+        isListening = true
     }
-    
-    // ── 録音停止 ──────────────────────────────────────
-    
-    func stopRecording() {
+
+    func stopListening() {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
+
         recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-        
         recognitionRequest = nil
+        recognitionTask?.cancel()
         recognitionTask = nil
-        isRecording = false
+
+        isListening = false
     }
-    
-    // ── リセット ──────────────────────────────────────
-    
-    func reset() {
-        stopRecording()
-        recognizedText = ""
-        errorMessage = nil
+
+    enum SpeechError: LocalizedError {
+        case recognizerUnavailable
+        case requestCreationFailed
+        case notAuthorized
+
+        var errorDescription: String? {
+            switch self {
+            case .recognizerUnavailable:
+                return "音声認識が利用できません"
+            case .requestCreationFailed:
+                return "認識リクエストの作成に失敗しました"
+            case .notAuthorized:
+                return "音声認識が許可されていません"
+            }
+        }
     }
 }

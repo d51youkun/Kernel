@@ -1,355 +1,262 @@
-// SidebarView.swift
-// テーマ対応左サイドバー（Magic Keyboard: Cmd+F で検索フォーカス）
-
 import SwiftUI
 
 struct SidebarView: View {
-    @EnvironmentObject var modelManager: ModelManager
-    @EnvironmentObject var chatVM: ChatViewModel
-    @Binding var showSettings: Bool
-    @EnvironmentObject var settings: AppSettings
-    @Environment(\.themeTokens) var tokens
+    @EnvironmentObject private var chatVM: ChatViewModel
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var jitService: JITService
 
-    @State private var showSearch = false
-    @State private var showRenameAlert = false
-    @State private var renamingConv: Conversation?
-    @State private var renameText = ""
-    @FocusState private var searchFocused: Bool
-
-    private var selectionBinding: Binding<UUID?> {
-        Binding(
-            get: { chatVM.currentConversation?.id },
-            set: { id in
-                if let id, let c = chatVM.conversations.first(where: { $0.id == id }) {
-                    chatVM.selectConversation(c)
-                }
-            }
-        )
-    }
+    @State private var showingArchive = false
+    @State private var showingSettings = false
+    @State private var showingJITSettings = false
 
     var body: some View {
         ZStack {
-            tokens.sidebarBackground.ignoresSafeArea()
+            ThemeEngine.sidebarBackgroundColor(for: settings.theme)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── ヘッダー ──
-                sidebarHeader
+                // Header
+                headerView
 
-                // ── 検索バー ──
-                if showSearch { searchBar }
+                // Search
+                searchBar
 
-                // ── モデルセレクター ──
-                modelSelector
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                // Conversation List
+                if showingArchive {
+                    archiveList
+                } else {
+                    conversationList
+                }
 
-                Divider().background(tokens.separator)
+                Spacer()
 
-                // ── 新規チャット ──
-                newChatButton
-
-                Divider().background(tokens.separator)
-
-                // ── 会話リスト ──
-                conversationList
-
-                Divider().background(tokens.separator)
-
-                // ── フッター ──
-                sidebarFooter
+                // Footer
+                footerView
             }
         }
-        .navigationTitle("Kernel")
-        .navigationBarTitleDisplayMode(.large)
-        .alert("Rename", isPresented: $showRenameAlert) {
-            TextField("Title", text: $renameText).autocorrectionDisabled()
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                if let c = renamingConv, !renameText.isEmpty {
-                    chatVM.renameConversation(c, to: renameText)
-                }
-            }
-        } message: { Text("会話のタイトルを変更") }
-        // Cmd+F: 検索
-        .background(
-            Button("") { withAnimation { showSearch.toggle() }; searchFocused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .opacity(0)
-        )
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+        .sheet(isPresented: $showingJITSettings) {
+            JITSettingsView()
+        }
     }
 
-    // ── ヘッダー ─────────────────────────────────────
-
-    private var sidebarHeader: some View {
+    private var headerView: some View {
         HStack {
             Text("Kernel")
-                .font(.title2.bold())
-                .foregroundStyle(tokens.textPrimary)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(ThemeEngine.textColor(for: settings.theme))
+
             Spacer()
-            Button {
-                withAnimation { showSearch.toggle() }
-                if showSearch { searchFocused = true }
-            } label: {
-                Image(systemName: showSearch ? "xmark.circle.fill" : "magnifyingglass")
-                    .foregroundStyle(tokens.textSecondary)
+
+            Button(action: { chatVM.newConversation(modelId: nil) }) {
+                Image(systemName: "square.and.pencil")
+                    .foregroundColor(settings.accentColor.color)
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .padding(16)
     }
 
-    // ── 検索バー ──────────────────────────────────────
-
     private var searchBar: some View {
-        HStack(spacing: 8) {
+        HStack {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(tokens.textSecondary)
-                .font(.callout)
-            TextField("Search conversations", text: $chatVM.searchQuery)
-                .font(.callout)
-                .foregroundStyle(tokens.textPrimary)
-                .tint(settings.accentColor.color)
-                .focused($searchFocused)
+                .foregroundColor(ThemeEngine.secondaryTextColor(for: settings.theme))
+
+            TextField("検索...", text: $chatVM.searchQuery)
+                .textFieldStyle(.plain)
+                .foregroundColor(ThemeEngine.textColor(for: settings.theme))
+
+            if !chatVM.searchQuery.isEmpty {
+                Button(action: { chatVM.searchQuery = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(ThemeEngine.secondaryTextColor(for: settings.theme))
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(tokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(ThemeEngine.messageUserBackgroundColor(for: settings.theme))
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
-
-    // ── モデルセレクター ──────────────────────────────
-
-    @ViewBuilder
-    private var modelSelector: some View {
-        if modelManager.models.isEmpty {
-            Button { showSettings = true } label: {
-                HStack {
-                    Image(systemName: "cpu").foregroundStyle(tokens.textSecondary)
-                    Text("モデルを追加").foregroundStyle(tokens.textSecondary)
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(tokens.textSecondary)
-                }
-            }
-            .buttonStyle(.plain)
-        } else {
-            Menu {
-                ForEach(modelManager.models) { m in
-                    Button {
-                        withAnimation { modelManager.selectedModel = m }
-                    } label: {
-                        Label(
-                            m.displayName,
-                            systemImage: modelManager.selectedModel?.id == m.id
-                                ? "checkmark.circle.fill" : "circle"
-                        )
-                    }
-                }
-                Divider()
-                Button("Manage Models…") { showSettings = true }
-            } label: {
-                HStack(spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(settings.accentColor.color.opacity(0.2))
-                            .frame(width: 26, height: 26)
-                        Image(systemName: "cpu.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(settings.accentColor.color)
-                    }
-                    Text(modelManager.selectedModel?.displayName ?? "Select Model")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(tokens.textPrimary)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(tokens.textSecondary)
-                }
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // ── 新規チャット ──────────────────────────────────
-
-    private var newChatButton: some View {
-        Button {
-            chatVM.newConversation(modelId: modelManager.selectedModel?.id)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.pencil")
-                    .font(.callout)
-                    .foregroundStyle(settings.accentColor.color)
-                Text("New Chat")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(tokens.textPrimary)
-                Spacer()
-                Text("⌘N")
-                    .font(.caption2)
-                    .foregroundStyle(tokens.textSecondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // ── 会話リスト（日付グループ化） ─────────────────────
 
     private var conversationList: some View {
-        List(selection: selectionBinding) {
-            ForEach(chatVM.conversationsByDate, id: \.0) { section in
-                Section {
-                    ForEach(section.1) { conv in
-                        ConversationRowView(
-                            conversation: conv,
-                            isSelected: chatVM.currentConversation?.id == conv.id,
-                            tokens: tokens,
-                            accentColor: settings.accentColor.color
-                        )
-                        .tag(conv.id)
-                        .listRowBackground(
-                            chatVM.currentConversation?.id == conv.id
-                                ? settings.accentColor.color.opacity(0.15)
-                                : Color.clear
-                        )
-                        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                withAnimation { chatVM.deleteConversation(conv) }
-                            } label: { Label("Delete", systemImage: "trash") }
-                        }
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                chatVM.togglePin(conv)
-                            } label: {
-                                Label(conv.isPinned ? "Unpin" : "Pin",
-                                      systemImage: conv.isPinned ? "pin.slash" : "pin")
-                            }
-                            .tint(.orange)
-
-                            Button {
-                                renamingConv = conv
-                                renameText   = conv.title
-                                showRenameAlert = true
-                            } label: { Label("Rename", systemImage: "pencil") }
-                            .tint(.blue)
-                            
-                            Button {
-                                chatVM.archiveConversation(conv)
-                            } label: { Label("Archive", systemImage: "archivebox") }
-                            .tint(.gray)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(chatVM.conversationsByDate, id: \.0) { group in
+                    Section(header: sectionHeader(group.0)) {
+                        ForEach(group.1) { conv in
+                            ConversationRow(
+                                conversation: conv,
+                                isSelected: chatVM.currentConversation?.id == conv.id,
+                                accentColor: settings.accentColor.color,
+                                theme: settings.theme,
+                                onSelect: { chatVM.selectConversation(conv) },
+                                onRename: { newName in chatVM.renameConversation(conv, to: newName) },
+                                onDelete: { chatVM.deleteConversation(conv) },
+                                onTogglePin: { chatVM.togglePin(conv) },
+                                onArchive: { chatVM.archiveConversation(conv) }
+                            )
                         }
                     }
-                } header: {
-                    Text(section.0)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(tokens.textSecondary)
-                        .textCase(.uppercase)
-                }
-            }
-            
-            // アーカイブセクション
-            if !chatVM.archivedConversations.isEmpty {
-                Section {
-                    ForEach(chatVM.archivedConversations) { conv in
-                        ConversationRowView(
-                            conversation: conv,
-                            isSelected: chatVM.currentConversation?.id == conv.id,
-                            tokens: tokens,
-                            accentColor: settings.accentColor.color
-                        )
-                        .tag(conv.id)
-                        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                chatVM.unarchiveConversation(conv)
-                            } label: { Label("Unarchive", systemImage: "tray.and.arrow.up") }
-                            .tint(.blue)
-                        }
-                    }
-                } header: {
-                    Text("アーカイブ")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(tokens.textSecondary)
-                        .textCase(.uppercase)
                 }
             }
         }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
     }
 
-    // ── フッター ──────────────────────────────────────
-
-    private var sidebarFooter: some View {
-        Button {
-            showSettings = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "gearshape")
-                    .font(.callout)
-                    .foregroundStyle(tokens.textSecondary)
-                Text("Settings")
-                    .font(.callout)
-                    .foregroundStyle(tokens.textPrimary)
-                Spacer()
-                Text("⌘,")
-                    .font(.caption2)
-                    .foregroundStyle(tokens.textSecondary)
+    private var archiveList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(chatVM.archivedConversations) { conv in
+                    ConversationRow(
+                        conversation: conv,
+                        isSelected: chatVM.currentConversation?.id == conv.id,
+                        accentColor: settings.accentColor.color,
+                        theme: settings.theme,
+                        onSelect: { chatVM.selectConversation(conv) },
+                        onRename: { newName in chatVM.renameConversation(conv, to: newName) },
+                        onDelete: { chatVM.deleteConversation(conv) },
+                        onTogglePin: { chatVM.togglePin(conv) },
+                        onArchive: { chatVM.unarchiveConversation(conv) }
+                    )
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundColor(ThemeEngine.secondaryTextColor(for: settings.theme))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+    }
+
+    private var footerView: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(ThemeEngine.secondaryTextColor(for: settings.theme).opacity(0.3))
+
+            HStack(spacing: 16) {
+                Button(action: { showingArchive.toggle() }) {
+                    Label(showingArchive ? "会話" : "アーカイブ", systemImage: showingArchive ? "tray" : "archivebox")
+                        .foregroundColor(ThemeEngine.textColor(for: settings.theme))
+                }
+
+                Spacer()
+
+                Button(action: { showingJITSettings = true }) {
+                    Label("JIT", systemImage: jitService.status == .enabled ? "checkmark.circle.fill" : "exclamationmark.triangle")
+                        .foregroundColor(jitService.status == .enabled ? .green : .orange)
+                }
+
+                Button(action: { showingSettings = true }) {
+                    Label("設定", systemImage: "gearshape")
+                        .foregroundColor(ThemeEngine.textColor(for: settings.theme))
+                }
+            }
+            .font(.caption)
+            .padding(16)
+        }
     }
 }
 
-// ── 会話行 ────────────────────────────────────────────
-
-struct ConversationRowView: View {
+struct ConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
-    let tokens: ThemeTokens
     let accentColor: Color
+    let theme: UITheme
+    let onSelect: () -> Void
+    let onRename: (String) -> Void
+    let onDelete: () -> Void
+    let onTogglePin: () -> Void
+    let onArchive: () -> Void
+
+    @State private var isEditing = false
+    @State private var editedTitle = ""
+    @State private var showingDeleteAlert = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             if conversation.isPinned {
                 Image(systemName: "pin.fill")
-                    .font(.caption2)
-                    .foregroundStyle(accentColor.opacity(0.8))
+                    .foregroundColor(accentColor)
+                    .font(.caption)
             }
-            VStack(alignment: .leading, spacing: 3) {
+
+            if isEditing {
+                TextField("タイトル", text: $editedTitle)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.body)
+                    .onSubmit {
+                        onRename(editedTitle)
+                        isEditing = false
+                    }
+            } else {
                 Text(conversation.title)
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? tokens.textPrimary : tokens.textPrimary.opacity(0.85))
+                    .font(.body)
+                    .foregroundColor(ThemeEngine.textColor(for: theme))
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(conversation.updatedAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(tokens.textSecondary)
-                    if let last = conversation.messages.last(where: { $0.role != .system }) {
-                        Text("·")
-                            .font(.caption2)
-                            .foregroundStyle(tokens.textSecondary)
-                        Text(last.content)
-                            .font(.caption2)
-                            .foregroundStyle(tokens.textSecondary)
-                            .lineLimit(1)
+            }
+
+            Spacer()
+
+            Menu {
+                Button(isEditing ? "保存" : "名前を変更") {
+                    if isEditing {
+                        onRename(editedTitle)
+                        isEditing = false
+                    } else {
+                        editedTitle = conversation.title
+                        isEditing = true
                     }
                 }
+
+                Button(conversation.isPinned ? "ピン留め解除" : "ピン留め") {
+                    onTogglePin()
+                }
+
+                Button(conversation.isArchived ? "アーカイブ解除" : "アーカイブ") {
+                    onArchive()
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    showingDeleteAlert = true
+                } label: {
+                    Label("削除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundColor(ThemeEngine.secondaryTextColor(for: theme))
             }
-            Spacer()
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? accentColor.opacity(0.2) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isEditing {
+                onSelect()
+            }
+        }
+        .alert("会話を削除", isPresented: $showingDeleteAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("削除", role: .destructive) {
+                onDelete()
+            }
+        } message: {
+            Text("この会話を削除しますか？")
+        }
     }
 }
