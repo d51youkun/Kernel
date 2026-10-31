@@ -56,7 +56,7 @@ final class SpeechRecognitionService: NSObject, ObservableObject {
 
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
             Task { @MainActor in
-                if let error = error {
+                if error != nil {
                     self.stopListening()
                     return
                 }

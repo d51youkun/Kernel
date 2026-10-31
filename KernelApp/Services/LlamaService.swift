@@ -19,10 +19,11 @@ final class LlamaService: ObservableObject {
         loadedModelId = nil
 
         let path = entry.fileURL.path
+        let currentBridge = bridge
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    try self.bridge.loadModel(fromPath: path)
+                    try currentBridge.loadModel(fromPath: path)
                     Task { @MainActor in
                         self.isLoaded = true
                         self.loadedModelId = entry.id

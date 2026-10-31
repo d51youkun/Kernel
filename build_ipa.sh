@@ -64,12 +64,11 @@ echo "🔨 Compiling Release build..."
 # 7. 署名 & IPA パッケージング
 echo "📦 Signing with get-task-allow entitlement & packaging IPA..."
 APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
-xattr -rc "$APP_PATH"
-codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP_PATH"
-
 rm -rf Payload Kernel.ipa
 mkdir -p Payload
 cp -R "$APP_PATH" Payload/
+xattr -cr Payload/Kernel.app
+codesign -s - --force --entitlements KernelApp/KernelApp.entitlements Payload/Kernel.app
 zip -qr Kernel.ipa Payload/
 rm -rf Payload
 

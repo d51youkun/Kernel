@@ -137,10 +137,11 @@ struct JITSettingsView: View {
     }
 
     private func showFilePicker() {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
-        picker.delegate = DocumentPickerDelegate { url in
+        let delegate = DocumentPickerDelegate { url in
             jitService.importPairingFile(from: url)
         }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        picker.delegate = delegate
 
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootViewController = windowScene.windows.first?.rootViewController {
