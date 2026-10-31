@@ -7,14 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0E9B32B6E72E6755C84F10AC /* ThemeEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB4342443E0F8850339723EC /* ThemeEngine.swift */; };
 		22D79378C6CDB5AF41F16EDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2EBB42D69119E622E67842 /* Message.swift */; };
 		398245E4389673BD77D0E5A0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370CE5AD7E174645D7F35747 /* ContentView.swift */; };
+		53B24A09B487EE996A82BA17 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96F581402F42529EE436099 /* SpeechRecognitionService.swift */; };
+		6D452673AD147D15FD6573DA /* JITSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381EE619C1F612D423389A66 /* JITSettingsView.swift */; };
 		6EAE305035624B62FB4BFEA5 /* LlamaBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = C6AC6267D999A9D02AE26ADF /* LlamaBridge.mm */; };
+		7518AE0D976D6D48F04A2447 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB77454D76E7DCA53C49761 /* AppSettings.swift */; };
 		96251CDED1BB6BB65BE81A19 /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = ADC2C00470E11A49DAB5E2A2 /* llama.xcframework */; };
 		9D0EB4C37C0C3F890E0C606E /* LlamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C318E63C44092478526665 /* LlamaService.swift */; };
 		A7605747BC39F2E55FB8388C /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1402FFAA89949DE82AC86DA /* ChatView.swift */; };
 		B71AD5641C1D324ECB603441 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC670FA2501320DE61D75E14 /* SidebarView.swift */; };
 		B7971F69EB6782100448A162 /* KernelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B227CEE1A29F9BE5ED39ABC5 /* KernelApp.swift */; };
+		BA8F1A440216F60ABE6063D3 /* JITService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14569DC9E08F92A00CF1A0C9 /* JITService.swift */; };
 		BE6E0B82D594A4053D8E9619 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12939E05E7D895AC15323AD5 /* ChatViewModel.swift */; };
 		BE850A7F71E7AAC5EEA1B11E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0428F12FD3E8F12329D5A771 /* SettingsView.swift */; };
 		C55957D17AD3042F9E0E17DF /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EF807E1E06DF0CFAF86CE61 /* MessageBubbleView.swift */; };
@@ -22,6 +27,8 @@
 		D4CB0D93168AB9E89941980A /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = ADC2C00470E11A49DAB5E2A2 /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D5C4B2644C85A2AA4F203DDA /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654A7A2A1D0696ACD46A94E4 /* ModelManager.swift */; };
 		DBB289315F3322651348A21C /* ModelEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B816E7E3D0410DF5EB6CDD /* ModelEntry.swift */; };
+		E641BBC090635C5E7BCE2E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A29A8B6B909BDB0A72BC18F /* Assets.xcassets */; };
+		ECD8C8E81C7B2EBF98E752F1 /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9052E91BD0F886E823EA46F0 /* MarkdownView.swift */; };
 		F1A89C366DE18830D21F3344 /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C68264C66ACCFDE26DEE30 /* Conversation.swift */; };
 /* End PBXBuildFile section */
 
@@ -42,21 +49,28 @@
 /* Begin PBXFileReference section */
 		0428F12FD3E8F12329D5A771 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		12939E05E7D895AC15323AD5 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		14569DC9E08F92A00CF1A0C9 /* JITService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITService.swift; sourceTree = "<group>"; };
 		163819A8EAE5186297E4FE65 /* KernelApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KernelApp-Bridging-Header.h"; sourceTree = "<group>"; };
 		1EF807E1E06DF0CFAF86CE61 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		24C318E63C44092478526665 /* LlamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaService.swift; sourceTree = "<group>"; };
 		361E43AC4C91209D2D71318C /* LlamaBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LlamaBridge.h; sourceTree = "<group>"; };
 		370CE5AD7E174645D7F35747 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		381EE619C1F612D423389A66 /* JITSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITSettingsView.swift; sourceTree = "<group>"; };
+		3A29A8B6B909BDB0A72BC18F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		654A7A2A1D0696ACD46A94E4 /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
 		6FEE2A900C83842D644424BE /* KernelApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KernelApp.entitlements; sourceTree = "<group>"; };
 		7933841F4AD8643107381CF6 /* InputBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBarView.swift; sourceTree = "<group>"; };
+		9052E91BD0F886E823EA46F0 /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		A1402FFAA89949DE82AC86DA /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A3C68264C66ACCFDE26DEE30 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
+		A96F581402F42529EE436099 /* SpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionService.swift; sourceTree = "<group>"; };
 		AC2EBB42D69119E622E67842 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		ADC2C00470E11A49DAB5E2A2 /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = Frameworks/llama.xcframework; sourceTree = "<group>"; };
 		B227CEE1A29F9BE5ED39ABC5 /* KernelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelApp.swift; sourceTree = "<group>"; };
 		C6AC6267D999A9D02AE26ADF /* LlamaBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = LlamaBridge.mm; sourceTree = "<group>"; };
+		CB4342443E0F8850339723EC /* ThemeEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngine.swift; sourceTree = "<group>"; };
 		EC670FA2501320DE61D75E14 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		EDB77454D76E7DCA53C49761 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		F0B816E7E3D0410DF5EB6CDD /* ModelEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelEntry.swift; sourceTree = "<group>"; };
 		FF44A8BFCE5A4B5D1F5D7563 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FF9D7B83DF645BD480EA7672 /* KernelApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KernelApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,9 +91,18 @@
 		0332563B074B765726400528 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				381EE619C1F612D423389A66 /* JITSettingsView.swift */,
 				0428F12FD3E8F12329D5A771 /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		04C9D5D730BF529B5E8BDE97 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				CB4342443E0F8850339723EC /* ThemeEngine.swift */,
+			);
+			path = Theme;
 			sourceTree = "<group>";
 		};
 		4340B9C854B9E8028958CE8B /* Frameworks */ = {
@@ -115,6 +138,7 @@
 				D4B5AC6FBE02E5C3C2306779 /* Chat */,
 				0332563B074B765726400528 /* Settings */,
 				4D373871DC5DA27C163BB6D5 /* Sidebar */,
+				04C9D5D730BF529B5E8BDE97 /* Theme */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -122,8 +146,10 @@
 		761CF5D7989231C4D05D2B02 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				14569DC9E08F92A00CF1A0C9 /* JITService.swift */,
 				24C318E63C44092478526665 /* LlamaService.swift */,
 				654A7A2A1D0696ACD46A94E4 /* ModelManager.swift */,
+				A96F581402F42529EE436099 /* SpeechRecognitionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -131,6 +157,7 @@
 		9521BCC74ED18B719E3107D7 /* KernelApp */ = {
 			isa = PBXGroup;
 			children = (
+				3A29A8B6B909BDB0A72BC18F /* Assets.xcassets */,
 				FF44A8BFCE5A4B5D1F5D7563 /* Info.plist */,
 				6FEE2A900C83842D644424BE /* KernelApp.entitlements */,
 				9A1EDDDF0AC9DBD76EE152FB /* App */,
@@ -175,6 +202,7 @@
 			children = (
 				A1402FFAA89949DE82AC86DA /* ChatView.swift */,
 				7933841F4AD8643107381CF6 /* InputBarView.swift */,
+				9052E91BD0F886E823EA46F0 /* MarkdownView.swift */,
 				1EF807E1E06DF0CFAF86CE61 /* MessageBubbleView.swift */,
 			);
 			path = Chat;
@@ -183,6 +211,7 @@
 		DF7F177343EC868EC5B8B768 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				EDB77454D76E7DCA53C49761 /* AppSettings.swift */,
 				A3C68264C66ACCFDE26DEE30 /* Conversation.swift */,
 				AC2EBB42D69119E622E67842 /* Message.swift */,
 				F0B816E7E3D0410DF5EB6CDD /* ModelEntry.swift */,
@@ -206,6 +235,7 @@
 			buildConfigurationList = F4B316EB562EC920D51C2A1A /* Build configuration list for PBXNativeTarget "KernelApp" */;
 			buildPhases = (
 				3A5E2F7944F4134F138EAEE0 /* Sources */,
+				27BFECA9A5495A2758254525 /* Resources */,
 				8CD3B479D24BB2326B9B3685 /* Frameworks */,
 				CB333E196797E078771C4D12 /* Embed Frameworks */,
 			);
@@ -253,25 +283,42 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		27BFECA9A5495A2758254525 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E641BBC090635C5E7BCE2E5C /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		3A5E2F7944F4134F138EAEE0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7518AE0D976D6D48F04A2447 /* AppSettings.swift in Sources */,
 				A7605747BC39F2E55FB8388C /* ChatView.swift in Sources */,
 				BE6E0B82D594A4053D8E9619 /* ChatViewModel.swift in Sources */,
 				398245E4389673BD77D0E5A0 /* ContentView.swift in Sources */,
 				F1A89C366DE18830D21F3344 /* Conversation.swift in Sources */,
 				CC202CA5EB5AC13B86D6971F /* InputBarView.swift in Sources */,
+				BA8F1A440216F60ABE6063D3 /* JITService.swift in Sources */,
+				6D452673AD147D15FD6573DA /* JITSettingsView.swift in Sources */,
 				B7971F69EB6782100448A162 /* KernelApp.swift in Sources */,
 				6EAE305035624B62FB4BFEA5 /* LlamaBridge.mm in Sources */,
 				9D0EB4C37C0C3F890E0C606E /* LlamaService.swift in Sources */,
+				ECD8C8E81C7B2EBF98E752F1 /* MarkdownView.swift in Sources */,
 				22D79378C6CDB5AF41F16EDE /* Message.swift in Sources */,
 				C55957D17AD3042F9E0E17DF /* MessageBubbleView.swift in Sources */,
 				DBB289315F3322651348A21C /* ModelEntry.swift in Sources */,
 				D5C4B2644C85A2AA4F203DDA /* ModelManager.swift in Sources */,
 				BE850A7F71E7AAC5EEA1B11E /* SettingsView.swift in Sources */,
 				B71AD5641C1D324ECB603441 /* SidebarView.swift in Sources */,
+				53B24A09B487EE996A82BA17 /* SpeechRecognitionService.swift in Sources */,
+				0E9B32B6E72E6755C84F10AC /* ThemeEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

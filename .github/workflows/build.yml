@@ -2,43 +2,46 @@ name: Build IPA
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 env:
-  SCHEME: KernelApp
+  SCHEME:  KernelApp
   PROJECT: KernelApp.xcodeproj
 
 jobs:
   build:
     name: 🔨 Build & Package IPA
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode Version
+      - name: Select Xcode
         run: |
-          XCODE_APP=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)
-          if [ -z "$XCODE_APP" ]; then
-            XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
-          fi
-          echo "Selected Xcode: $XCODE_APP"
-          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 \
+               || ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using: $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Cache llama.xcframework
+        uses: actions/cache@v4
+        with:
+          path: Frameworks/llama.xcframework
+          key: llama-b10549
+
       - name: Download llama.xcframework
         run: |
           if [ ! -d "Frameworks/llama.xcframework" ]; then
             mkdir -p Frameworks
-            curl -L https://github.com/ggml-org/llama.cpp/releases/download/b10549/llama-b10549-xcframework.zip -o Frameworks/llama-xcframework.zip
+            curl -L https://github.com/ggml-org/llama.cpp/releases/download/b10549/llama-b10549-xcframework.zip \
+              -o Frameworks/llama-xcframework.zip
             unzip -q Frameworks/llama-xcframework.zip -d Frameworks/
             mv Frameworks/build-apple/llama.xcframework Frameworks/
             rm -rf Frameworks/build-apple Frameworks/llama-xcframework.zip
@@ -47,35 +50,43 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build Application
+      - name: Build
         run: |
+          DEVDIR=$(xcode-select -p)
+          MACRO_DIR="${DEVDIR}/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
+          MACRO_FLAGS=""
+          for lib in libSwiftUIMacros libObservationMacros libFoundationMacros; do
+            f="${MACRO_DIR}/${lib}.dylib"
+            [ -f "$f" ] && MACRO_FLAGS="${MACRO_FLAGS} -load-plugin-library ${f}"
+          done
+
           xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
+            -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -derivedDataPath ./build/DerivedData \
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            ${MACRO_FLAGS:+OTHER_SWIFT_FLAGS="$MACRO_FLAGS"}
 
-      - name: Sign with StickJIT Entitlements & Package IPA
+      - name: Sign & Package IPA
         run: |
-          APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
-          xattr -rc "$APP_PATH"
-          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP_PATH"
-          
+          APP="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
+          xattr -rc "$APP"
+          codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP"
           mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
+          cp -R "$APP" Payload/
           zip -qr Kernel.ipa Payload/
           rm -rf Payload
-          echo "✅ Generated Kernel.ipa:"
-          ls -lh Kernel.ipa
+          echo "✅ $(du -sh Kernel.ipa)"
 
-      - name: Upload IPA Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-IPA-${{ github.run_number }}
           path: Kernel.ipa
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90

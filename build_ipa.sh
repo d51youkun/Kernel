@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== 🚀 Building Kernel for iPadOS (StickJIT Ready) ==="
+echo "=== 🚀 Building Kernel for iPadOS (JIT Ready) ==="
 
 # 1. Xcode のパス設定
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
@@ -37,20 +37,32 @@ fi
 echo "⚙️  Generating Xcode project..."
 "$XCODEGEN" generate --spec project.yml
 
-# 5. ビルド
+# 5. Swift Macro プラグインパスを解決
+#    Xcode 27 のコマンドラインビルドでは swift-plugin-server が動かないため
+#    -load-plugin-library で dylib を直接ロードする
+MACRO_PLUGIN_DIR="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
+MACRO_FLAGS="-load-plugin-library ${MACRO_PLUGIN_DIR}/libSwiftUIMacros.dylib"
+MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libObservationMacros.dylib"
+MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libFoundationMacros.dylib"
+if [ -f "${MACRO_PLUGIN_DIR}/libSwiftDataMacros.dylib" ]; then
+    MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libSwiftDataMacros.dylib"
+fi
+
+# 6. ビルド
 echo "🔨 Compiling Release build..."
 "$DEVELOPER_DIR/usr/bin/xcodebuild" build \
     -project KernelApp.xcodeproj \
     -scheme KernelApp \
-    -destination "generic/platform=iOS" \
+    -sdk iphoneos \
     -derivedDataPath ./build/DerivedData \
     -configuration Release \
+    OTHER_SWIFT_FLAGS="$MACRO_FLAGS" \
     CODE_SIGN_IDENTITY="" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO
 
-# 6. 署名 & IPA パッケージング
-echo "📦 Signing with StickJIT get-task-allow & packaging IPA..."
+# 7. 署名 & IPA パッケージング
+echo "📦 Signing with get-task-allow entitlement & packaging IPA..."
 APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
 xattr -rc "$APP_PATH"
 codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP_PATH"
