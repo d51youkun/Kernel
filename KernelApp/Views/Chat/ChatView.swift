@@ -47,7 +47,8 @@ struct ChatView: View {
     }
 
     /// モデル選択メニュー
-    private var modelMenu: Menu<some View, some View> {
+    @ViewBuilder
+    private var modelMenu: some View {
         Menu {
             ForEach(modelManager.models) { model in
                 Button {

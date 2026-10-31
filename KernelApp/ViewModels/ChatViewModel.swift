@@ -26,8 +26,6 @@ final class ChatViewModel: ObservableObject {
 
     init() { loadFromDisk() }
 
-    deinit { generationTask?.cancel() }
-
     // ── 会話管理 ───────────────────────────────
 
     func newConversation(modelId: UUID?) {

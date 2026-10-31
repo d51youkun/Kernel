@@ -65,22 +65,23 @@ struct JITSettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var statusIcon: some View {
         switch jit.status {
         case .enabled:
-            return Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 32))
                 .foregroundStyle(.green)
         case .enabling:
-            return Image(systemName: "bolt.badge.clock")
+            Image(systemName: "bolt.badge.clock")
                 .font(.system(size: 32))
                 .foregroundStyle(.orange)
         case .failed:
-            return Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 32))
                 .foregroundStyle(.red)
         default:
-            return Image(systemName: "bolt.slash")
+            Image(systemName: "bolt.slash")
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary)
         }
