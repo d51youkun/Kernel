@@ -29,10 +29,6 @@ final class LlamaService: ObservableObject {
         LlamaBridge.initializeBackend()
     }
 
-    deinit {
-        LlamaBridge.freeBackend()
-    }
-
     // ── モデル管理 ───────────────────────────
 
     /// 指定モデルをロードする (既にロード済みなら何もしない)

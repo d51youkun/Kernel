@@ -77,9 +77,18 @@ jobs:
           APP="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
           test -d "$APP" || (echo "Kernel.app not found" && exit 1)
           xattr -rc "$APP"
-          # ldid で擬似署名 (get-task-allow を保持、sideload 対応)
           brew install ldid
-          ldid -S KernelApp/KernelApp.entitlements "$APP/Kernel"
+          # 埋め込みの動的ライブラリ llama.framework も署名しないと
+          # 実機で dyld が読み込めず起動即クラッシュする
+          if [ -f "$APP/Frameworks/llama.framework/llama" ]; then
+            ldid -S "$APP/Frameworks/llama.framework/llama"
+            ldid -S "$APP/Frameworks/llama.framework/Info.plist" 2>/dev/null || true
+            ls -l "$APP/Frameworks/llama.framework/"
+          fi
+          # メインバイナリは get-task-allow 付きで署名 (JIT 有効化に必須)
+          ldid -SKernelApp/KernelApp.entitlements "$APP/Kernel"
+          # 署名確認 (無署名が残っていないか)
+          codesign -dv "$APP/Kernel" 2>&1 | head -3 || true
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -qr Kernel.ipa Payload/

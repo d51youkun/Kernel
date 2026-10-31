@@ -57,7 +57,21 @@ xcodebuild build \
 echo "📦 Signing & packaging IPA..."
 APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
 xattr -rc "$APP_PATH"
-codesign -s - --force --entitlements KernelApp/KernelApp.entitlements "$APP_PATH"
+
+# ldid が無ければインストール (Homebrew)
+if ! command -v ldid &> /dev/null; then
+    brew install ldid
+fi
+
+# 埋め込みの動的ライブラリ llama.framework も署名しないと
+# 実機で dyld が読み込めず起動即クラッシュする
+if [ -f "$APP_PATH/Frameworks/llama.framework/llama" ]; then
+    ldid -S "$APP_PATH/Frameworks/llama.framework/llama"
+    ldid -S "$APP_PATH/Frameworks/llama.framework/Info.plist" 2>/dev/null || true
+fi
+
+# メインバイナリは get-task-allow 付きで署名 (JIT 有効化に必須)
+ldid -SKernelApp/KernelApp.entitlements "$APP_PATH/Kernel"
 
 rm -rf Payload Kernel.ipa
 mkdir -p Payload
