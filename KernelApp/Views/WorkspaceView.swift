@@ -233,6 +233,8 @@ private struct ChatScreen: View {
                 TextField("メッセージを入力", text: $draft, axis: .vertical)
                     .lineLimit(1...8).focused($focused).padding(.horizontal, 4).padding(.top, 7)
                     .accessibilityIdentifier("chat.composer")
+                    // onSubmit・keyboardShortcut は意図的に付けない
+                    // Magic Keyboard + 日本語IMEでゃゅょ等の小文字変換がブロックされるため
                 HStack {
                     Button { importing = true } label: { Image(systemName: "plus").font(.title3) }.accessibilityLabel("ファイルを添付").disabled(extracting || store.busy)
                     if extracting { ProgressView().controlSize(.small); Text("資料を読み取り中…").font(.caption) }
@@ -249,7 +251,7 @@ private struct ChatScreen: View {
                     }
                     .accessibilityLabel(store.busy ? "生成を停止" : "送信")
                     .disabled(!store.busy && ((draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || extracting || store.importing))
-                    .keyboardShortcut(.return, modifiers: .command)
+                    // Cmd+Return は IME確定と競合するため外す（ボタンタップで送信）
                 }.buttonStyle(.plain)
             }
             .padding(14).background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 27))
