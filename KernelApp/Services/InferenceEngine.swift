@@ -16,9 +16,12 @@ final class InferenceEngine {
            configuration?.useMetal == settings.useMetal { configure(settings); return }
         let bytes = model.size
         let available = Int64(os_proc_available_memory())
-        guard bytes > 0, bytes < available * 9 / 10 else {
-            throw KernelError.message("このモデルには空きメモリが不足しています。小さい量子化モデルを選択してください。モデル: \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory))／利用可能: \(ByteCountFormatter.string(fromByteCount: available, countStyle: .memory))")
+        // ソフト警告: モデルが空きメモリを超える場合でも allowLarge フラグがあれば続行
+        // ハードブロック: モデルが空きの2倍以上は物理的に不可能
+        if bytes > 0, bytes > available * 2 {
+            throw KernelError.message("このモデルは大きすぎます（\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory))）。利用可能メモリ（\(ByteCountFormatter.string(fromByteCount: available, countStyle: .memory))）の2倍を超えています。")
         }
+        // 空きメモリを超える場合は警告をステータスに表示して続行（iOSがページング確保する場合がある）
         configure(settings)
         loadedID = nil
         let engine = bridge

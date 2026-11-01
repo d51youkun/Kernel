@@ -150,6 +150,15 @@ final class AppStore: ObservableObject {
         operation = Task {
             let started = Date()
             do {
+                // メモリ事前チェック（警告のみ、ブロックしない）
+                if let model = selectedModel {
+                    let bytes = model.size
+                    let available = Int64(os_proc_available_memory())
+                    if bytes > 0, bytes > available * 9 / 10 {
+                        status = "⚠️ メモリが少ない可能性があります（モデル: \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory))／空き: \(ByteCountFormatter.string(fromByteCount: available, countStyle: .memory))）。読み込みを続行…"
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    }
+                }
                 try await engine.load(model, settings: settings)
                 try Task.checkCancellation()
                 guard let conversation = conversations.first(where: { $0.id == id }) else { throw CancellationError() }

@@ -35,6 +35,7 @@ struct SettingsScreen: View {
                     Button { importing = true } label: { Label(store.importing ? "モデルをコピー中…" : "GGUFモデルを追加", systemImage: "plus.circle") }
                         .disabled(store.importing || store.busy)
                     Button("モデルをメモリから解放", systemImage: "memorychip") { store.unloadModel() }.disabled(store.busy)
+                    Text("空きメモリを大幅に超えるモデルはiOSにキルされる可能性があります。M4 iPad Pro（16GB）では5〜9BのQ4量子化モデルが動作目安です。").font(.caption).foregroundStyle(.secondary)
                 }.disabled(store.busy)
 
                 Section("推論") {
