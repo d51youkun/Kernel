@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kernel — iPadローカルAIアプリ 使い方ガイド</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+    --border: #2a2a2a; --accent: #10a37f; --accent2: #7c3aed;
+    --text: #ececec; --muted: #8e8ea0;
+    --code-bg: #0d0d0d; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, "Hiragino Sans", sans-serif; line-height: 1.7; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* NAV */
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(10,10,10,.92); backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px;
+        display: flex; align-items: center; gap: 32px; }
+  nav .logo { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+  nav .logo span { color: var(--accent); }
+  nav ul { list-style: none; display: flex; gap: 20px; font-size: .9rem; color: var(--muted); }
+  nav ul li a { color: var(--muted); } nav ul li a:hover { color: var(--text); text-decoration: none; }
+
+  /* HERO */
+  .hero { text-align: center; padding: 80px 24px 64px; max-width: 720px; margin: 0 auto; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; margin-bottom: 20px; }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+  .badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 9999px;
+           padding: 5px 14px; font-size: .82rem; color: var(--muted); }
+  .badge.green { border-color: #10a37f44; color: var(--accent); }
+  .dl-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--accent);
+            color: #fff; padding: 12px 28px; border-radius: 10px; font-weight: 600; font-size: 1rem;
+            margin-top: 28px; transition: opacity .2s; }
+  .dl-btn:hover { opacity: .85; text-decoration: none; }
+
+  /* LAYOUT */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 24px 80px; }
+  .section { margin-top: 64px; }
+  .section h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; padding-bottom: 12px;
+                border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .section h2 .icon { font-size: 1.4rem; }
+  .section h3 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 10px; color: var(--text); }
+  .section p, .section li { color: var(--muted); margin-bottom: 8px; }
+  .section ul, .section ol { padding-left: 20px; }
+  .section li { margin-bottom: 6px; }
+
+  /* STEP CARDS */
+  .steps { display: grid; gap: 16px; margin-top: 20px; }
+  .step { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+          padding: 20px 24px; display: flex; gap: 18px; align-items: flex-start; }
+  .step-num { background: var(--accent); color: #fff; width: 32px; height: 32px; border-radius: 50%;
+              display: flex; align-items: center; justify-content: center; font-weight: 700;
+              font-size: .9rem; flex-shrink: 0; }
+  .step-body h4 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+  .step-body p, .step-body li { font-size: .92rem; color: var(--muted); }
+
+  /* CODE */
+  pre, code { font-family: "SF Mono", "Fira Code", monospace; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+        padding: 16px 20px; overflow-x: auto; font-size: .88rem; color: #a8d8a8; margin: 12px 0; }
+  code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; font-size: .88rem; color: #a8d8a8; }
+
+  /* CALLOUT */
+  .callout { border-radius: 10px; padding: 14px 18px; margin: 16px 0; border-left: 4px solid; }
+  .callout.warn { background: #f59e0b11; border-color: var(--warn); }
+  .callout.info { background: #10a37f11; border-color: var(--accent); }
+  .callout.tip  { background: #7c3aed11; border-color: var(--accent2); }
+  .callout p { margin: 0; font-size: .92rem; color: var(--text); }
+  .callout strong { color: var(--warn); }
+  .callout.info strong { color: var(--accent); }
+  .callout.tip strong { color: var(--accent2); }
+
+  /* FEATURE GRID */
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px; }
+  .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .feature .feat-icon { font-size: 1.5rem; margin-bottom: 8px; }
+  .feature h4 { font-size: .95rem; font-weight: 600; margin-bottom: 6px; }
+  .feature p { font-size: .84rem; color: var(--muted); margin: 0; }
+
+  /* MOCKUP PLACEHOLDER */
+  .mockup { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px;
+            aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+            color: var(--muted); font-size: .9rem; margin: 16px 0; }
+  .mockup-ipad { max-width: 520px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .9rem; }
+  th { background: var(--surface2); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+
+  /* FOOTER */
+  footer { border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; color: var(--muted); font-size: .88rem; }
+  footer a { color: var(--muted); }
+
+  @media(max-width:600px) {
+    nav ul { display: none; }
+    .hero h1 { font-size: 1.8rem; }
+    .step { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">⬡ <span>Kernel</span></div>
+  <ul>
+    <li><a href="#install">インストール</a></li>
+    <li><a href="#model">モデル追加</a></li>
+    <li><a href="#jit">JIT有効化</a></li>
+    <li><a href="#settings">設定</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>iPadで<em>ローカルAI</em>を動かす<br>プライバシー優先の会話アプリ</h1>
+  <p>Kernelは、GGUFモデルをiPad上でオフライン実行するアプリです。<br>会話はすべてデバイス内に留まり、クラウドには一切送信されません。</p>
+  <div class="badges">
+    <span class="badge green">✓ 完全オフライン</span>
+    <span class="badge green">✓ Metal GPU対応</span>
+    <span class="badge">iPadOS 17.4+</span>
+    <span class="badge">M1〜M4対応</span>
+    <span class="badge">GGUFフォーマット</span>
+  </div>
+  <a href="https://github.com/d51youkun/Kernel/releases/latest" class="dl-btn" target="_blank">
+    ⬇︎ 最新版IPAをダウンロード
+  </a>
+</div>
+
+<div class="container">
+
+<!-- FEATURES -->
+<div class="section" id="features">
+  <h2><span class="icon">✦</span> 主な機能</h2>
+  <div class="features">
+    <div class="feature"><div class="feat-icon">🤖</div><h4>ChatGPT風UI</h4><p>会話履歴・サイドバー・Markdownレンダリング・コードブロック対応</p></div>
+    <div class="feature"><div class="feat-icon">🌐</div><h4>自動日本語翻訳</h4><p>英語で返ってきた回答をリアルタイムで日本語に翻訳。生成中に即時置き換え</p></div>
+    <div class="feature"><div class="feat-icon">📎</div><h4>ファイル添付</h4><p>テキスト・コード・PDF・画像OCRに対応。内容をAIが読み込んで回答</p></div>
+    <div class="feature"><div class="feat-icon">📁</div><h4>プロジェクト管理</h4><p>会話をフォルダで整理。ピン留め・アーカイブ・検索に対応</p></div>
+    <div class="feature"><div class="feat-icon">⚡</div><h4>JIT有効化</h4><p>StikJIT統合。ペアリングファイルで外部ツール不要のJIT有効化</p></div>
+    <div class="feature"><div class="feat-icon">🎤</div><h4>音声入力</h4><p>オンデバイス音声認識。マイクボタンを押して話すだけ</p></div>
+  </div>
+</div>
+
+<!-- INSTALL -->
+<div class="section" id="install">
+  <h2><span class="icon">📲</span> インストール方法</h2>
+  <p>KernelはApp Storeには公開されていません。サイドロード（非公式インストール）が必要です。</p>
+
+  <h3>SideStore を使う方法（推奨）</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h4>SideStoreをインストール</h4>
+      <p><a href="https://sidestore.io" target="_blank">sidestore.io</a> からSideStoreをインストールしてください。初回のみMac/PCが必要です。</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h4>IPAをダウンロード</h4>
+      <p><a href="https://github.com/d51youkun/Kernel/releases/latest" target="_blank">GitHub Releases</a> から最新の <code>Kernel.ipa</code> をダウンロード</p>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h4>SideStoreでインストール</h4>
+      <p>SideStoreを開き、「＋」ボタンからIPAファイルを選択してインストール</p>
+    </div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">
+      <h4>7日ごとの更新</h4>
+      <p>SideStoreのVPNが有効な状態で自動更新されます。手動の場合は同じ手順を繰り返してください。</p>
+    </div></div>
+  </div>
+
+  <h3>Sideloadlyを使う方法</h3>
+  <div class="callout info"><p><strong>ℹ️</strong> Mac/PCにApple IDを登録する必要があります。7日ごとに再インストールが必要です。</p></div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h4>Sideloadlyをインストール</h4>
+      <p><a href="https://sideloadly.io" target="_blank">sideloadly.io</a> からダウンロード・インストール</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h4>iPadをUSB接続</h4>
+      <p>Sideloadlyを起動し、IPAファイルをドラッグ。Apple IDを入力してStartをクリック</p>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h4>デバイスを信頼</h4>
+      <p>設定 → 一般 → VPNとデバイス管理 → Apple ID → 信頼</p>
+    </div></div>
+  </div>
+</div>
+
+<!-- MODEL -->
+<div class="section" id="model">
+  <h2><span class="icon">🧠</span> GGUFモデルの追加方法</h2>
+  <div class="callout tip"><p><strong>推奨：</strong> 初めて使う場合は <strong>Qwen2.5-3B-Instruct-Q4_K_M.gguf</strong>（約2GB）から始めましょう。日本語が得意で動作が軽快です。</p></div>
+
+  <h3>モデルのダウンロード先</h3>
+  <table>
+    <tr><th>モデル名</th><th>サイズ</th><th>特徴</th><th>推奨端末</th></tr>
+    <tr><td>Llama-3.2-1B-Instruct Q4_K_M</td><td>~0.8GB</td><td>最軽量・高速</td><td>全機種</td></tr>
+    <tr><td>Qwen2.5-3B-Instruct Q4_K_M</td><td>~2.0GB</td><td>日本語強い・バランス良</td><td>M1以上</td></tr>
+    <tr><td>Llama-3.2-3B-Instruct Q4_K_M</td><td>~2.0GB</td><td>英語が得意</td><td>M1以上</td></tr>
+    <tr><td>Qwen2.5-7B-Instruct Q4_K_M</td><td>~4.7GB</td><td>高品質・日本語◎</td><td>M2以上16GB</td></tr>
+    <tr><td>Qwen2.5-9B-Instruct Q4_K_M</td><td>~5.6GB</td><td>高品質・M4推奨</td><td>M4 16GB以上</td></tr>
+  </table>
+  <p>上記モデルは <a href="https://huggingface.co/models?library=gguf&sort=trending" target="_blank">Hugging Face</a> からダウンロードできます。検索に <code>gguf q4_k_m</code> と入力してください。</p>
+
+  <h3>Kernelへの追加手順</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h4>GGUFファイルを用意</h4>
+      <p>Hugging FaceからSafari経由でダウンロードするか、Macから転送します。</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h4>Files.appでKernelフォルダに配置</h4>
+      <p>Files.app → このiPad内 → Kernel → Documents → Models にGGUFファイルを移動</p>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h4>Kernelで選択</h4>
+      <p>アプリを起動 → 左上のモデル名をタップ → 追加したモデルを選択</p>
+      <p>または：左下のユーザーアイコン → 設定 → モデルセクション から追加ボタン（＋）をタップ</p>
+    </div></div>
+  </div>
+</div>
+
+<!-- JIT -->
+<div class="section" id="jit">
+  <h2><span class="icon">⚡</span> JIT有効化（内蔵デバッガ）</h2>
+  <div class="callout warn"><p><strong>⚠️ 注意：</strong> JITは推論の高速化技術ですが、GGUFモデルの動作には必須ではありません。設定せずに普通に使えます。</p></div>
+
+  <h3>JITとは？</h3>
+  <p>JIT（Just-In-Time Compilation）は、コードを実行時にコンパイルして高速化する技術です。Kernelの場合、Metal GPUを使わないCPU推論時に速度が向上します。<strong>Metal ON（デフォルト）の場合はJITの効果は限定的です。</strong></p>
+
+  <h3>方法1：ペアリングファイル方式（推奨）</h3>
+  <p>MacにiDevice Pairをインストールし、ペアリングファイルを生成してKernelに読み込む方法です。</p>
+
+  <h4>Step 1: MacにHomebrewをインストール</h4>
+  <pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre>
+
+  <h4>Step 2: iDevice Pairをインストール</h4>
+  <pre>brew install libimobiledevice</pre>
+
+  <h4>Step 3: iPadをUSBでMacに接続</h4>
+  <div class="callout info"><p><strong>ℹ️</strong> iPadで「このコンピューターを信頼しますか？」が表示されたら「信頼」をタップしてください。</p></div>
+
+  <h4>Step 4: ペアリングファイルを生成</h4>
+  <pre>idevice_pair pair</pre>
+  <p>成功すると <code>SUCCESS: Paired with device ...</code> と表示されます。ペアリングファイルは以下の場所に保存されます：</p>
+  <pre>/var/db/lockdown/[デバイスのUDID].plist</pre>
+
+  <h4>Step 5: ファイルをiPadに転送</h4>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h4>ファイルをコピー</h4>
+      <pre>ls /var/db/lockdown/*.plist</pre>
+      <p>表示されたファイルをAirDropまたはUSBでiPadに転送します。</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h4>Kernelにインポート</h4>
+      <p>Kernel → 設定 → JIT・内蔵デバッガ → 「ペアリングファイルを追加」をタップ → plistファイルを選択</p>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h4>JITを有効化</h4>
+      <p>「内蔵デバッガでJITを有効化」をタップ。「JIT実行確認済み」と表示されれば成功です。</p>
+    </div></div>
+  </div>
+
+  <h3>方法2：StikJIT / StikDebug（VPN方式）</h3>
+  <p>外部アプリのVPNを使う方法です。Kernelの設定画面からワンタップで呼び出せます。</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h4>StikJITまたはStikDebugをインストール</h4>
+      <p><a href="https://github.com/StikDebug/StikJIT" target="_blank">GitHub: StikDebug/StikJIT</a> からIPAをダウンロードしてSideStoreでインストール</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h4>Wi-Fiに接続した状態でKernelを開く</h4>
+      <p>LocalDevVPNが必要です。StikJITを起動してVPNを有効にしてください。</p>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h4>KernelからJITを有効化</h4>
+      <p>設定 → JIT・内蔵デバッガ → 「内蔵デバッガでJITを有効化」</p>
+    </div></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="section" id="settings">
+  <h2><span class="icon">⚙️</span> 設定ガイド</h2>
+
+  <h3>推論設定</h3>
+  <table>
+    <tr><th>設定項目</th><th>説明</th><th>推奨値</th></tr>
+    <tr><td>Metal GPUを使用</td><td>Apple SiliconeのGPUで推論を高速化</td><td>ON（必須）</td></tr>
+    <tr><td>CPUスレッド数</td><td>CPU推論時の並列スレッド数</td><td>M4: 4コア</td></tr>
+    <tr><td>コンテキスト長</td><td>一度に記憶できるトークン数</td><td>4096</td></tr>
+    <tr><td>最大出力</td><td>1回の返答の最大長</td><td>1024</td></tr>
+    <tr><td>創造性（Temperature）</td><td>0に近いほど正確、1.5に近いほど創造的</td><td>0.65</td></tr>
+    <tr><td>メモリ警告</td><td>大きいモデル読み込み時に警告表示</td><td>9Bなら OFF</td></tr>
+  </table>
+
+  <h3>日本語・翻訳設定</h3>
+  <p>英語で回答が返ってきた場合、生成中にリアルタイムで日本語に翻訳します。段落が確定するたびに即時置き換えるため、全文生成後を待つ必要はありません。</p>
+  <div class="callout tip"><p><strong>💡 ヒント：</strong> カスタム指示に「必ず日本語で回答してください」と入力すると、最初から日本語で生成されるため翻訳不要になり速度が上がります。</p></div>
+
+  <h3>メモリ機能</h3>
+  <p>設定 → 「メモリ（自分で登録した情報）」に任意のテキストを入力すると、すべての会話でその情報を参考にします。例：「私の名前は〇〇です。Swift開発者です。」</p>
+</div>
+
+<!-- FAQ -->
+<div class="section" id="faq">
+  <h2><span class="icon">❓</span> よくある質問</h2>
+
+  <h3>Q. モデルが「メモリ不足」と表示される</h3>
+  <p>A. 使用中の他のアプリを終了してからKernelを再起動してください。それでも解決しない場合は、より小さい量子化モデル（Q4_K_S または 3B以下）をお試しください。M4 iPad Pro（16GB）の場合は設定の「大きいモデルのメモリ警告」をOFFにすると9Bまで試せます。</p>
+
+  <h3>Q. 回答が途中で止まる</h3>
+  <p>A. 「最大出力トークン数」を増やしてください（設定 → 推論 → 最大出力 → 2048）。または新しいチャットを開いて再試行してください。</p>
+
+  <h3>Q. 英語で回答が返ってくる</h3>
+  <p>A. カスタム指示（設定 → カスタム指示）に「必ず日本語で回答してください」を追加してください。または日本語対応のInstructモデル（Qwen2.5シリーズ推奨）をお使いください。</p>
+
+  <h3>Q. JITは必要ですか？</h3>
+  <p>A. 必須ではありません。Metal GPU（設定でON）が有効な場合、JITによる速度向上は限定的です。CPU推論のみを使う場合に効果があります。</p>
+
+  <h3>Q. 7日ごとにアプリが使えなくなる</h3>
+  <p>A. 無料のApple IDでサイドロードした場合、7日ごとに再インストールが必要です。SideStoreを使うと自動更新されます。</p>
+
+  <h3>Q. iPadからHugging Faceでモデルをダウンロードできますか？</h3>
+  <p>A. はい。SafariでHugging Faceを開き、GGUFファイルのダウンロードリンクをタップするとFiles.appに保存されます。その後Files.app → Kernel → Documents → Models に移動してください。</p>
+</div>
+
+</div><!-- /container -->
+
+<footer>
+  <p>Kernel — <a href="https://github.com/d51youkun/Kernel" target="_blank">GitHub</a> · <a href="https://github.com/d51youkun/Kernel/releases/latest" target="_blank">最新リリース</a></p>
+  <p style="margin-top:8px">© 2026 Kernel Contributors. オープンソース。</p>
+</footer>
+
+</body>
+</html>

@@ -165,19 +165,23 @@ final class AppStore: ObservableObject {
                 let prompt = try await buildPrompt(conversation)
                 status = "回答を生成中…"
                 var result = ""
-                var lastUpdate = Date.distantPast
-                for try await piece in engine.stream(prompt) {
-                    try Task.checkCancellation()
-                    result += piece
-                    if Date().timeIntervalSince(lastUpdate) > 0.06 {
-                        setAnswer(id, messageID: answer.id, content: result); lastUpdate = Date()
+                let chunkSize = max(160, settings.contextLength / 5)
+
+                // リアルタイム翻訳: 生成しながら段落ごとに即時翻訳してUIを更新
+                result = try await engine.streamWithRealtimeTranslation(
+                    prompt,
+                    chunkSize: chunkSize
+                ) { [weak self] partial in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        self.setAnswer(id, messageID: answer.id, content: partial)
                     }
                 }
+
                 try Task.checkCancellation()
-                guard !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw KernelError.message("モデルから回答が返りませんでした。別のInstructモデルをお試しください。") }
-                status = "日本語を確認・翻訳中…"
-                result = try await engine.japanese(result, chunkSize: max(160, settings.contextLength / 5))
-                try Task.checkCancellation()
+                guard !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw KernelError.message("モデルから回答が返りませんでした。別のInstructモデルをお試しください。")
+                }
                 setAnswer(id, messageID: answer.id, content: result)
                 modify(id) { c in
                     if let i = c.messages.firstIndex(where: { $0.id == answer.id }) { c.messages[i].duration = Date().timeIntervalSince(started) }

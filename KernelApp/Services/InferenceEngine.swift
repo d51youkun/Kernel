@@ -108,6 +108,82 @@ final class InferenceEngine {
         return translated.joined(separator: "```")
     }
 
+    // MARK: - リアルタイム翻訳
+    /// ストリーミング生成を受け取り、段落が確定するたびに翻訳して置き換えるストリーム
+    /// - onUpdate: 現在までの確定テキストを受け取るコールバック（UIの即時更新用）
+    func streamWithRealtimeTranslation(
+        _ messages: [[String: String]],
+        chunkSize: Int,
+        onUpdate: @escaping (String) -> Void
+    ) async throws -> String {
+        var rawBuffer   = ""   // 未確定の生テキスト
+        var finalText   = ""   // 確定済みの翻訳済みテキスト
+        var inCodeBlock = false
+        var codeBuffer  = ""
+
+        // 段落確定の閾値（文字数 or 改行2回）
+        let paragraphThreshold = max(120, chunkSize / 4)
+
+        func flush() async throws {
+            guard !rawBuffer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            let chunk = rawBuffer; rawBuffer = ""
+            if Self.foreignProse(chunk) {
+                var translated = ""
+                for _ in 0..<2 {
+                    translated = try await complete([
+                        ["role": "system", "content": "あなたは翻訳者です。入力を意味を変えず自然な日本語に翻訳してください。Markdown、数値、URL、固有名詞は保持してください。訳文のみを返してください。"],
+                        ["role": "user", "content": chunk]
+                    ])
+                    if !Self.foreignProse(translated), !translated.isEmpty { break }
+                }
+                finalText += translated.isEmpty ? chunk : translated
+            } else {
+                finalText += chunk
+            }
+            onUpdate(finalText)
+        }
+
+        for try await piece in stream(messages) {
+            try Task.checkCancellation()
+
+            // コードブロックのトグル検出
+            let combined = rawBuffer + piece
+            let codeMarkers = combined.components(separatedBy: "```").count - 1
+            if codeMarkers % 2 == 1 {
+                // コードブロック開始または終了
+                inCodeBlock.toggle()
+            }
+
+            if inCodeBlock {
+                // コードブロック内はそのまま蓄積・翻訳なし
+                codeBuffer += piece
+                finalText += piece
+                onUpdate(finalText + rawBuffer)  // ライブプレビュー
+            } else {
+                if !codeBuffer.isEmpty {
+                    rawBuffer += codeBuffer; codeBuffer = ""
+                }
+                rawBuffer += piece
+                // ライブプレビュー（未翻訳のまま表示して追いつき感を出す）
+                onUpdate(finalText + rawBuffer)
+
+                // 段落確定チェック
+                let hasParagraphBreak = rawBuffer.contains("\n\n")
+                let isLong = rawBuffer.count >= paragraphThreshold
+                if hasParagraphBreak || isLong {
+                    try await flush()
+                }
+            }
+        }
+
+        // 残りをフラッシュ
+        if !rawBuffer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try await flush()
+        }
+
+        return finalText
+    }
+
     static func chunks(_ text: String, limit: Int) -> [String] {
         guard !text.isEmpty else { return [] }
         var remaining = text[...]
