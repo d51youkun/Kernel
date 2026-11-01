@@ -2,34 +2,25 @@ import SwiftUI
 
 @main
 struct KernelApp: App {
-    @StateObject private var modelManager = ModelManager.shared
-    @StateObject private var chatVM = ChatViewModel()
-    @StateObject private var settingsStore = AppSettingsStore()
-
-    init() {
-        LlamaBridge.initializeBackend()
-    }
+    @StateObject private var store = AppStore()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(modelManager)
-                .environmentObject(chatVM)
-                .environmentObject(settingsStore.appSettings)
-                .onReceive(NotificationCenter.default.publisher(for: .kernelOpenURL)) { note in
-                    guard let url = note.object as? URL else { return }
-                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            WorkspaceView()
+                .environmentObject(store)
+                .tint(.primary)
+                .preferredColorScheme(store.settings.appearance == "dark" ? .dark : store.settings.appearance == "light" ? .light : nil)
+                .onChange(of: phase) { _, value in
+                    if value != .active { store.persist() }
+                    if value == .background { store.stop() }
                 }
-                .onReceive(
-                    NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-                ) { _ in
-                    settingsStore.appSettings.save()
-                    chatVM.saveToDisk()
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+                    store.memoryWarning()
+                }
+                .onOpenURL { url in
+                    if url.pathExtension.lowercased() == "gguf" { store.importModels([url]) }
                 }
         }
     }
-}
-
-final class AppSettingsStore: ObservableObject {
-    let appSettings = AppSettings.shared
 }

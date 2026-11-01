@@ -2,53 +2,75 @@ name: KernelApp
 options:
   bundleIdPrefix: com.kernel
   deploymentTarget:
-    iOS: "17.0"
-  xcodeVersion: "15.0"
+    iOS: "17.4"
   createIntermediateGroups: true
-  indentWidth: 4
-  tabWidth: 4
-
-targets:
-  KernelApp:
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    TARGETED_DEVICE_FAMILY: "2"
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "2"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+targetTemplates:
+  App:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
     sources:
       - path: KernelApp
-    resources:
-      - path: KernelApp/Assets.xcassets
-    dependencies:
-      - framework: Frameworks/llama.xcframework
-        embed: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app
         PRODUCT_NAME: Kernel
-        SWIFT_VERSION: "5.10"
-        TARGETED_DEVICE_FAMILY: "2"
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app
         INFOPLIST_FILE: KernelApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: KernelApp/KernelApp.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: KernelApp/Bridge/KernelApp-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        FRAMEWORK_SEARCH_PATHS:
-          - $(inherited)
-          - $(PROJECT_DIR)/Frameworks
-          - $(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64
-        HEADER_SEARCH_PATHS:
-          - $(inherited)
-          - $(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64/llama.framework/Headers
-        CLANG_CXX_LANGUAGE_STANDARD: gnu++17
-        CLANG_CXX_LIBRARY: libc++
-        GCC_C_LANGUAGE_STANDARD: gnu17
-        ENABLE_BITCODE: NO
-        CLANG_ENABLE_MODULES: YES
-        CLANG_ENABLE_OBJC_ARC: YES
-        ALWAYS_SEARCH_USER_PATHS: NO
-        DEVELOPMENT_TEAM: ""
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_IDENTITY: ""
-        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-        DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
-        CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "1.0"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+    dependencies:
+      - sdk: Security.framework
+targets:
+  KernelApp:
+    templates: [App]
+    dependencies:
+      - framework: Frameworks/llama.xcframework
+        embed: true
+      - target: KernelDebugger
+        embed: true
+    settings:
+      base:
+        HEADER_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64/llama.framework/Headers"
+  KernelDebugger:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: DebuggerExtension
+    dependencies:
+      - framework: Frameworks/StikJIT.xcframework
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: KernelDebugger
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app.Debugger
+        INFOPLIST_FILE: DebuggerExtension/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: DebuggerExtension/DebuggerExtension-Bridging-Header.h
+        HEADER_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/KernelApp/Bridge"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+  KernelPreview:
+    templates: [App]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.preview
+        SUPPORTED_PLATFORMS: iphonesimulator
+schemes:
+  KernelApp:
+    build:
+      targets:
+        KernelApp: all
+  KernelPreview:
+    build:
+      targets:
+        KernelPreview: all

@@ -1,340 +1,169 @@
 #import "LlamaBridge.h"
-
-#include <llama.h>
+#import <TargetConditionals.h>
 #include <atomic>
+#include <algorithm>
 #include <string>
 #include <vector>
-#include <cstring>
+#include <stdexcept>
+#if !TARGET_OS_SIMULATOR
+#include <llama.h>
+#endif
 
-static NSErrorDomain const LlamaErrorDomain = @"com.kernel.LlamaError";
-typedef NS_ERROR_ENUM(LlamaErrorDomain, LlamaError) {
-    LlamaErrorModelLoad = 100,
-    LlamaErrorContextInit = 101,
-    LlamaErrorTokenize = 102,
-    LlamaErrorDecode = 103,
-    LlamaErrorNoModel = 104,
-};
+static NSError *failure(NSString *text) {
+    return [NSError errorWithDomain:@"Kernel.Inference" code:1 userInfo:@{NSLocalizedDescriptionKey:text}];
+}
 
 @implementation LlamaBridge {
+#if !TARGET_OS_SIMULATOR
     llama_model *_model;
     llama_context *_ctx;
-    dispatch_queue_t _genQueue;
-    std::atomic<bool> _shouldCancel;
-
-    int32_t _contextLength;
-    int32_t _nGpuLayers;
-    float _temperature;
-    int32_t _topK;
-    float _topP;
-    int32_t _maxNewTokens;
+#endif
+    dispatch_queue_t _queue;
+    std::atomic<bool> _cancel;
 }
+@synthesize contextLength = _contextLength, nGpuLayers = _nGpuLayers, temperature = _temperature;
+@synthesize topK = _topK, topP = _topP, maxNewTokens = _maxNewTokens;
 
 + (void)initializeBackend {
-    llama_backend_init();
+#if !TARGET_OS_SIMULATOR
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ llama_backend_init(); });
+#endif
 }
-
-+ (void)freeBackend {
-    llama_backend_free();
-}
-
++ (void)freeBackend { /* Backend lives for the process lifetime. */ }
 - (instancetype)init {
-    if (self = [super init]) {
-        _model = nullptr;
-        _ctx = nullptr;
-        _genQueue = dispatch_queue_create("com.kernel.llama.gen", DISPATCH_QUEUE_SERIAL);
-        _shouldCancel = false;
-        _contextLength = 4096;
-        _nGpuLayers = 99;
-        _temperature = 0.80f;
-        _topK = 40;
-        _topP = 0.95f;
-        _maxNewTokens = 1024;
+    if ((self = [super init])) {
+        _queue = dispatch_queue_create("app.kernel.inference", DISPATCH_QUEUE_SERIAL);
+        _cancel = false;
+        _contextLength = 4096; _nGpuLayers = 99; _temperature = .65;
+        _topK = 40; _topP = .95; _maxNewTokens = 1024;
     }
     return self;
 }
-
-- (void)dealloc {
-    [self unloadModel];
-}
-
 - (BOOL)isModelLoaded {
-    return _model != nullptr;
+#if !TARGET_OS_SIMULATOR
+    return _model != nullptr && _ctx != nullptr;
+#else
+    return NO;
+#endif
 }
-
-- (int32_t)contextLength {
-    return _contextLength;
-}
-
-- (void)setContextLength:(int32_t)v {
-    _contextLength = v;
-}
-
-- (int32_t)nGpuLayers {
-    return _nGpuLayers;
-}
-
-- (void)setNGpuLayers:(int32_t)v {
-    _nGpuLayers = v;
-}
-
-- (float)temperature {
-    return _temperature;
-}
-
-- (void)setTemperature:(float)v {
-    _temperature = v;
-}
-
-- (int32_t)topK {
-    return _topK;
-}
-
-- (void)setTopK:(int32_t)v {
-    _topK = v;
-}
-
-- (float)topP {
-    return _topP;
-}
-
-- (void)setTopP:(float)v {
-    _topP = v;
-}
-
-- (int32_t)maxNewTokens {
-    return _maxNewTokens;
-}
-
-- (void)setMaxNewTokens:(int32_t)v {
-    _maxNewTokens = v;
-}
-
-- (nullable NSString *)modelDescription {
-    if (!_model) return nil;
-    char buf[256] = {0};
-    llama_model_desc(_model, buf, sizeof(buf));
-    return [NSString stringWithUTF8String:buf];
-}
-
+- (NSString *)modelDescription { return nil; }
 - (BOOL)loadModelFromPath:(NSString *)path error:(NSError **)error {
-    [self unloadModel];
-
-    llama_model_params mparams = llama_model_default_params();
-    mparams.n_gpu_layers = _nGpuLayers;
-
-    _model = llama_model_load_from_file(path.UTF8String, mparams);
-    if (!_model) {
-        if (error) {
-            *error = [NSError errorWithDomain:LlamaErrorDomain
-                                         code:LlamaErrorModelLoad
-                                     userInfo:@{NSLocalizedDescriptionKey:
-                                                    [NSString stringWithFormat:@"モデルのロードに失敗しました: %@",
-                                                     path.lastPathComponent]}];
-        }
-        return NO;
-    }
-
-    llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx = (uint32_t)_contextLength;
-    cparams.n_batch = 512;
-
-    _ctx = llama_new_context_with_model(_model, cparams);
-    if (!_ctx) {
-        llama_model_free(_model);
-        _model = nullptr;
-        if (error) {
-            *error = [NSError errorWithDomain:LlamaErrorDomain
-                                         code:LlamaErrorContextInit
-                                     userInfo:@{NSLocalizedDescriptionKey:
-                                                    @"コンテキストの初期化に失敗しました"}];
-        }
-        return NO;
-    }
-
-    return YES;
+    __block BOOL ok = NO;
+    __block NSError *problem = nil;
+    _cancel = true;
+    dispatch_sync(_queue, ^{
+#if !TARGET_OS_SIMULATOR
+        [self releaseModel];
+        self->_cancel = false;
+        @try {
+            try {
+                [LlamaBridge initializeBackend];
+                auto mp = llama_model_default_params();
+                mp.n_gpu_layers = self->_nGpuLayers;
+                self->_model = llama_model_load_from_file(path.fileSystemRepresentation, mp);
+                if (!self->_model) throw std::runtime_error("GGUFモデルを読み込めません。形式・対応アーキテクチャ・空きメモリを確認してください。");
+                auto cp = llama_context_default_params();
+                cp.n_ctx = (uint32_t)std::clamp(self->_contextLength, 512, 16384);
+                cp.n_batch = 256; cp.n_ubatch = 128;
+                cp.n_threads = cp.n_threads_batch = (int32_t)std::max(1ul, std::min(6ul, (unsigned long)NSProcessInfo.processInfo.activeProcessorCount - 1));
+                cp.abort_callback = [](void *p) { return ((std::atomic<bool> *)p)->load(); };
+                cp.abort_callback_data = &self->_cancel;
+                self->_ctx = llama_init_from_model(self->_model, cp);
+                if (!self->_ctx) throw std::runtime_error("推論領域を確保できません。コンテキスト長を小さくしてください。");
+                ok = YES;
+            } catch (const std::exception &e) { problem = failure([NSString stringWithUTF8String:e.what()]); }
+            catch (...) { problem = failure(@"推論エンジンの初期化に失敗しました。"); }
+        } @catch (NSException *e) { problem = failure(e.reason ?: @"モデル初期化エラー"); }
+        if (!ok) [self releaseModel];
+#else
+        problem = failure(@"GGUF推論は実機iPadで使用してください。シミュレータは画面検証用です。");
+#endif
+    });
+    if (error) *error = problem;
+    return ok;
 }
-
+- (void)releaseModel {
+#if !TARGET_OS_SIMULATOR
+    if (_ctx) { llama_free(_ctx); _ctx = nullptr; }
+    if (_model) { llama_model_free(_model); _model = nullptr; }
+#endif
+}
 - (void)unloadModel {
-    _shouldCancel = true;
-    dispatch_sync(_genQueue, ^{
+    _cancel = true;
+    dispatch_sync(_queue, ^{ [self releaseModel]; });
+}
+- (void)cancelGeneration { _cancel = true; }
+- (void)generateFromMessages:(NSArray<NSDictionary<NSString *,NSString *> *> *)messages tokenCallback:(LlamaTokenCallback)callback {
+    _cancel = false;
+    // Capture an immutable configuration snapshot before entering the worker queue.
+    const float temp = _temperature, topP = _topP;
+    const int topK = _topK, limit = _maxNewTokens;
+    dispatch_async(_queue, ^{
+        @autoreleasepool {
+#if !TARGET_OS_SIMULATOR
+            llama_sampler *sampler = nullptr;
+            NSError *problem = nil;
+            try {
+                if (!self->_model || !self->_ctx) throw std::runtime_error("モデルを選択してください。");
+                const auto *vocab = llama_model_get_vocab(self->_model);
+                std::vector<std::string> roles, texts;
+                for (NSDictionary *m in messages) {
+                    roles.emplace_back([m[@"role"] ?: @"user" UTF8String]);
+                    texts.emplace_back([m[@"content"] ?: @"" UTF8String]);
+                }
+                std::vector<llama_chat_message> chat;
+                for (size_t i = 0; i < roles.size(); ++i) chat.push_back({roles[i].c_str(), texts[i].c_str()});
+                const char *tmpl = llama_model_chat_template(self->_model, nullptr);
+                if (!tmpl) tmpl = "chatml";
+                int n = llama_chat_apply_template(tmpl, chat.data(), chat.size(), true, nullptr, 0);
+                if (n <= 0) throw std::runtime_error("このモデルのチャットテンプレートに対応していません。Instructモデルを使用してください。");
+                std::vector<char> formatted(n + 1);
+                n = llama_chat_apply_template(tmpl, chat.data(), chat.size(), true, formatted.data(), (int)formatted.size());
+                if (n <= 0 || n >= (int)formatted.size()) throw std::runtime_error("プロンプトを構築できませんでした。");
+                int count = llama_tokenize(vocab, formatted.data(), n, nullptr, 0, true, true);
+                if (count >= 0) throw std::runtime_error("入力が空です。");
+                std::vector<llama_token> tokens(-count);
+                count = llama_tokenize(vocab, formatted.data(), n, tokens.data(), (int)tokens.size(), true, true);
+                const int ctx = (int)llama_n_ctx(self->_ctx);
+                const int reserve = std::min(limit, ctx / 2);
+                if (count <= 0 || count + reserve > ctx) throw std::runtime_error("入力がコンテキスト長を超えています。添付を短くするか、新しいチャットを開始してください。");
+                llama_memory_clear(llama_get_memory(self->_ctx), true);
+                for (int offset = 0; offset < count && !self->_cancel; offset += 256) {
+                    auto batch = llama_batch_get_one(tokens.data() + offset, std::min(256, count - offset));
+                    if (llama_decode(self->_ctx, batch) != 0 && !self->_cancel) throw std::runtime_error("入力の処理に失敗しました。空きメモリを確認してください。");
+                }
+                sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+                if (temp <= 0) llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
+                else {
+                    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(topK));
+                    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(topP, 1));
+                    llama_sampler_chain_add(sampler, llama_sampler_init_temp(temp));
+                    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+                }
+                std::string pending;
+                for (int i = 0; i < std::min(limit, ctx - count) && !self->_cancel; ++i) {
+                    llama_token token = llama_sampler_sample(sampler, self->_ctx, -1);
+                    if (llama_vocab_is_eog(vocab, token)) break;
+                    std::vector<char> piece(256);
+                    int length = llama_token_to_piece(vocab, token, piece.data(), (int)piece.size(), 0, false);
+                    if (length < 0) { piece.resize(-length); length = llama_token_to_piece(vocab, token, piece.data(), (int)piece.size(), 0, false); }
+                    if (length > 0) pending.append(piece.data(), length);
+                    NSString *text = [[NSString alloc] initWithBytes:pending.data() length:pending.size() encoding:NSUTF8StringEncoding];
+                    if (text) { if (text.length) callback(text, NO, nil); pending.clear(); }
+                    if (i + 1 < limit && count + i + 1 < ctx) {
+                        auto batch = llama_batch_get_one(&token, 1);
+                        if (llama_decode(self->_ctx, batch) != 0 && !self->_cancel) throw std::runtime_error("回答の生成に失敗しました。");
+                    }
+                }
+            } catch (const std::exception &e) { problem = failure([NSString stringWithUTF8String:e.what()]); }
+            catch (...) { problem = failure(@"推論処理に失敗しました。"); }
+            if (sampler) llama_sampler_free(sampler);
+            callback(nil, YES, problem);
+#else
+            callback(nil, YES, failure(@"推論には実機iPadが必要です。"));
+#endif
+        }
     });
-    _shouldCancel = false;
-
-    if (_ctx) {
-        llama_free(_ctx);
-        _ctx = nullptr;
-    }
-    if (_model) {
-        llama_model_free(_model);
-        _model = nullptr;
-    }
 }
-
-- (void)cancelGeneration {
-    _shouldCancel = true;
-}
-
-- (void)generateFromMessages:(NSArray<NSDictionary<NSString *, NSString *> *> *)messages
-               tokenCallback:(LlamaTokenCallback)callback {
-    if (!_model || !_ctx) {
-        callback(nil, YES,
-                 [NSError errorWithDomain:LlamaErrorDomain
-                                     code:LlamaErrorNoModel
-                                 userInfo:@{NSLocalizedDescriptionKey: @"モデルがロードされていません"}]);
-        return;
-    }
-
-    _shouldCancel = false;
-
-    dispatch_async(_genQueue, ^{
-        [self _generateFromMessages:messages callback:callback];
-    });
-}
-
-- (void)_generateFromMessages:(NSArray<NSDictionary<NSString *, NSString *> *> *)messages
-                     callback:(LlamaTokenCallback)callback {
-
-    std::string prompt;
-    const struct llama_vocab *vocab = llama_model_get_vocab(_model);
-
-    std::vector<llama_chat_message> chatMsgs;
-    std::vector<std::string> roles, contents;
-
-    for (NSDictionary<NSString *, NSString *> *msg in messages) {
-        roles.push_back(std::string([msg[@"role"] UTF8String]));
-        contents.push_back(std::string([msg[@"content"] UTF8String]));
-    }
-    for (size_t i = 0; i < roles.size(); i++) {
-        llama_chat_message m;
-        m.role = roles[i].c_str();
-        m.content = contents[i].c_str();
-        chatMsgs.push_back(m);
-    }
-
-    const char *tmpl = llama_model_chat_template(_model, nullptr);
-    int32_t bufLen = 8192;
-    std::vector<char> tmplBuf(bufLen);
-    int32_t needed = llama_chat_apply_template(
-        tmpl,
-        chatMsgs.data(), chatMsgs.size(),
-        true,
-        tmplBuf.data(), bufLen
-    );
-    if (needed > bufLen) {
-        tmplBuf.resize(needed + 1);
-        needed = llama_chat_apply_template(
-            tmpl,
-            chatMsgs.data(), chatMsgs.size(),
-            true,
-            tmplBuf.data(), needed
-        );
-    }
-    if (needed > 0) {
-        prompt = std::string(tmplBuf.data(), (size_t)needed);
-    } else {
-        prompt.clear();
-        for (size_t i = 0; i < chatMsgs.size(); i++) {
-            std::string role(chatMsgs[i].role);
-            std::string content(chatMsgs[i].content);
-            if (role == "system") {
-                prompt += "<|im_start|>system\n" + content + "<|im_end|>\n";
-            } else if (role == "user") {
-                prompt += "<|im_start|>user\n" + content + "<|im_end|>\n";
-            } else {
-                prompt += "<|im_start|>assistant\n" + content + "<|im_end|>\n";
-            }
-        }
-        prompt += "<|im_start|>assistant\n";
-    }
-
-    int32_t nCtx = (int32_t)llama_n_ctx(_ctx);
-    std::vector<llama_token> tokens(nCtx);
-
-    int32_t nTokens = llama_tokenize(
-        vocab,
-        prompt.c_str(), (int32_t)prompt.size(),
-        tokens.data(), (int32_t)tokens.size(),
-        true, true
-    );
-    if (nTokens < 0) {
-        callback(nil, YES,
-                 [NSError errorWithDomain:LlamaErrorDomain
-                                     code:LlamaErrorTokenize
-                                 userInfo:@{NSLocalizedDescriptionKey: @"トークナイズに失敗しました"}]);
-        return;
-    }
-    tokens.resize(nTokens);
-
-    llama_memory_clear(llama_get_memory(_ctx), true);
-
-    llama_batch batch = llama_batch_get_one(tokens.data(), (int32_t)tokens.size());
-    if (llama_decode(_ctx, batch) != 0) {
-        callback(nil, YES,
-                 [NSError errorWithDomain:LlamaErrorDomain
-                                     code:LlamaErrorDecode
-                                 userInfo:@{NSLocalizedDescriptionKey: @"プロンプトのデコードに失敗しました"}]);
-        return;
-    }
-
-    llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(_topK));
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(_topP, 1));
-    llama_sampler_chain_add(smpl, llama_sampler_init_temp(_temperature));
-    llama_sampler_chain_add(smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-
-    int32_t nCur = nTokens;
-    int32_t remaining = _maxNewTokens;
-
-    std::string utf8Buf;
-
-    while (nCur < nCtx && remaining > 0 && !_shouldCancel.load()) {
-        llama_token token = llama_sampler_sample(smpl, _ctx, -1);
-
-        if (llama_vocab_is_eog(vocab, token)) {
-            break;
-        }
-
-        char pieceBuf[256] = {0};
-        int32_t pieceLen = llama_token_to_piece(vocab, token,
-                                                 pieceBuf, (int32_t)sizeof(pieceBuf) - 1,
-                                                 0, false);
-        if (pieceLen < 0) {
-            std::vector<char> bigBuf(-pieceLen + 1, 0);
-            pieceLen = llama_token_to_piece(vocab, token,
-                                             bigBuf.data(), (int32_t)bigBuf.size() - 1,
-                                             0, false);
-            if (pieceLen > 0) {
-                utf8Buf.append(bigBuf.data(), (size_t)pieceLen);
-            }
-        } else if (pieceLen > 0) {
-            utf8Buf.append(pieceBuf, (size_t)pieceLen);
-        }
-
-        NSString *piece = [NSString stringWithUTF8String:utf8Buf.c_str()];
-        if (piece) {
-            callback(piece, NO, nil);
-            utf8Buf.clear();
-        }
-
-        batch = llama_batch_get_one(&token, 1);
-        if (llama_decode(_ctx, batch) != 0) break;
-
-        nCur++;
-        remaining--;
-    }
-
-    if (!utf8Buf.empty()) {
-        NSString *rest = [NSString stringWithUTF8String:utf8Buf.c_str()];
-        if (!rest) {
-            rest = [[NSString alloc] initWithBytes:utf8Buf.c_str()
-                                            length:utf8Buf.size()
-                                          encoding:NSISOLatin1StringEncoding];
-        }
-        if (rest) callback(rest, NO, nil);
-    }
-
-    llama_sampler_free(smpl);
-    callback(nil, YES, nil);
-}
-
 @end
