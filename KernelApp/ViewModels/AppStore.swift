@@ -150,8 +150,8 @@ final class AppStore: ObservableObject {
         operation = Task {
             let started = Date()
             do {
-                // メモリ事前チェック（警告のみ、ブロックしない）
-                if let model = selectedModel {
+                // メモリ事前チェック（設定ONの場合のみ警告を表示して続行）
+                if let model = selectedModel, settings.showMemoryWarning {
                     let bytes = model.size
                     let available = Int64(os_proc_available_memory())
                     if bytes > 0, bytes > available * 9 / 10 {

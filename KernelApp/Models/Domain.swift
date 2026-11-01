@@ -79,6 +79,7 @@ struct Settings: Codable, Equatable {
     var contextLength = 4096
     var maxTokens = 1024
     var nThreads = 4          // CPUスレッド数（M4 iPad Pro: パフォーマンスコア4が最適）
+    var showMemoryWarning = true  // 大きいモデル読み込み時に警告を表示
     var useMetal = true
     var readAloud = false
     var memory = ""

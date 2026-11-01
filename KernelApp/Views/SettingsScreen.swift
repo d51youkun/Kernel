@@ -40,6 +40,7 @@ struct SettingsScreen: View {
 
                 Section("推論") {
                     Toggle("Metal GPUを使用", isOn: $store.settings.useMetal)
+                    Toggle("大きいモデルのメモリ警告を表示", isOn: $store.settings.showMemoryWarning)
                     Picker("CPUスレッド数", selection: $store.settings.nThreads) {
                         ForEach([1, 2, 4, 6, 8, 10], id: \.self) { Text("\($0) コア").tag($0) }
                     }
@@ -53,7 +54,7 @@ struct SettingsScreen: View {
                         Text(String(format: "創造性（Temperature） %.2f", store.settings.temperature))
                         Slider(value: $store.settings.temperature, in: 0...1.5, step: 0.05)
                     }
-                    Text("CPUスレッドはMetal OFF時またはCPUオフロード層で使用されます。M4 iPad Proは10コア（パフォーマンス4＋効率6）。推論には4〜6が最適です。設定変更は次の生成から反映されます。").font(.caption).foregroundStyle(.secondary)
+                    Text("CPUスレッドはMetal OFF時またはCPUオフロード層で使用されます。M4 iPad Proは10コア（パフォーマンス4＋効率6）。推論には4〜6が最適です。メモリ警告をOFFにすると大きいモデルを確認なしで読み込みます。設定変更は次の生成から反映されます。").font(.caption).foregroundStyle(.secondary)
                 }.disabled(store.busy)
 
                 Section {
