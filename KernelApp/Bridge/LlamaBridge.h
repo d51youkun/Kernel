@@ -13,6 +13,7 @@ typedef void (^LlamaTokenCallback)(NSString * _Nullable piece,
 
 @property (nonatomic, assign) int32_t contextLength;
 @property (nonatomic, assign) int32_t nGpuLayers;
+@property (nonatomic, assign) int32_t nThreads;
 @property (nonatomic, assign) float temperature;
 @property (nonatomic, assign) int32_t topK;
 @property (nonatomic, assign) float topP;

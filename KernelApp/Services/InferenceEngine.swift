@@ -33,10 +33,12 @@ final class InferenceEngine {
 
     private func configure(_ settings: Settings) {
         bridge.contextLength = Int32(settings.contextLength)
-        bridge.maxNewTokens = Int32(settings.maxTokens)
-        bridge.temperature = Float(settings.temperature)
-        bridge.topP = 0.95; bridge.topK = 40
-        bridge.nGpuLayers = settings.useMetal ? 99 : 0
+        bridge.maxNewTokens  = Int32(settings.maxTokens)
+        bridge.temperature   = Float(settings.temperature)
+        bridge.topP          = 0.95
+        bridge.topK          = 40
+        bridge.nGpuLayers    = settings.useMetal ? 99 : 0
+        bridge.nThreads      = Int32(settings.nThreads)   // 最大6コア
     }
 
     func stream(_ messages: [[String: String]]) -> AsyncThrowingStream<String, Error> {

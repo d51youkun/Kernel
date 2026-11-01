@@ -21,7 +21,7 @@ static NSError *failure(NSString *text) {
     dispatch_queue_t _queue;
     std::atomic<bool> _cancel;
 }
-@synthesize contextLength = _contextLength, nGpuLayers = _nGpuLayers, temperature = _temperature;
+@synthesize contextLength = _contextLength, nGpuLayers = _nGpuLayers, nThreads = _nThreads, temperature = _temperature;
 @synthesize topK = _topK, topP = _topP, maxNewTokens = _maxNewTokens;
 
 + (void)initializeBackend {
@@ -35,7 +35,7 @@ static NSError *failure(NSString *text) {
     if ((self = [super init])) {
         _queue = dispatch_queue_create("app.kernel.inference", DISPATCH_QUEUE_SERIAL);
         _cancel = false;
-        _contextLength = 4096; _nGpuLayers = 99; _temperature = .65;
+        _contextLength = 4096; _nGpuLayers = 99; _nThreads = 6; _temperature = .65;
         _topK = 40; _topP = .95; _maxNewTokens = 1024;
     }
     return self;
@@ -66,7 +66,7 @@ static NSError *failure(NSString *text) {
                 auto cp = llama_context_default_params();
                 cp.n_ctx = (uint32_t)std::clamp(self->_contextLength, 512, 16384);
                 cp.n_batch = 256; cp.n_ubatch = 128;
-                cp.n_threads = cp.n_threads_batch = (int32_t)std::max(1ul, std::min(6ul, (unsigned long)NSProcessInfo.processInfo.activeProcessorCount - 1));
+                cp.n_threads = cp.n_threads_batch = (int32_t)std::max(1, std::min((int)self->_nThreads, (int)NSProcessInfo.processInfo.activeProcessorCount));
                 cp.abort_callback = [](void *p) { return ((std::atomic<bool> *)p)->load(); };
                 cp.abort_callback_data = &self->_cancel;
                 self->_ctx = llama_init_from_model(self->_model, cp);
