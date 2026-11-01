@@ -78,7 +78,7 @@ struct Settings: Codable, Equatable {
     var temperature = 0.65
     var contextLength = 4096
     var maxTokens = 1024
-    var nThreads = 6          // CPUスレッド数（最大6コア）
+    var nThreads = 4          // CPUスレッド数（M4 iPad Pro: パフォーマンスコア4が最適）
     var useMetal = true
     var readAloud = false
     var memory = ""

@@ -16,7 +16,7 @@ final class InferenceEngine {
            configuration?.useMetal == settings.useMetal { configure(settings); return }
         let bytes = model.size
         let available = Int64(os_proc_available_memory())
-        guard bytes > 0, bytes < available * 8 / 10 else {
+        guard bytes > 0, bytes < available * 9 / 10 else {
             throw KernelError.message("このモデルには空きメモリが不足しています。小さい量子化モデルを選択してください。モデル: \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory))／利用可能: \(ByteCountFormatter.string(fromByteCount: available, countStyle: .memory))")
         }
         configure(settings)

@@ -35,7 +35,7 @@ static NSError *failure(NSString *text) {
     if ((self = [super init])) {
         _queue = dispatch_queue_create("app.kernel.inference", DISPATCH_QUEUE_SERIAL);
         _cancel = false;
-        _contextLength = 4096; _nGpuLayers = 99; _nThreads = 6; _temperature = .65;
+        _contextLength = 4096; _nGpuLayers = 99; _nThreads = 4; _temperature = .65;
         _topK = 40; _topP = .95; _maxNewTokens = 1024;
     }
     return self;
