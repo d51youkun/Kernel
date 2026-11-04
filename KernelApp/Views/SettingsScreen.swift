@@ -12,6 +12,12 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("ワークスペース") {
+                    NavigationLink { ConnectionsScreen() } label: { Label("アカウント・API接続", systemImage: "person.crop.circle.badge.checkmark") }
+                    Toggle("英語の説明を日本語に自動翻訳", isOn: $store.workspace.autoTranslate)
+                    Toggle("API出力上限で自動継続（最大3回）", isOn: $store.workspace.autoContinue)
+                    Text("コード・固有名詞・技術用語の原表記を保持します。翻訳は回答生成の完了後に行います。自動継続には追加のAPI利用料が発生します。").font(.caption).foregroundStyle(.secondary)
+                }.disabled(store.busy)
                 Section("モデル") {
                     if store.models.isEmpty { Text("GGUF形式のInstructモデルを追加してください。日本語対応・1〜3Bの量子化モデルから試すことをおすすめします。").foregroundStyle(.secondary) }
                     ForEach(store.models) { model in
@@ -35,7 +41,7 @@ struct SettingsScreen: View {
                     Button { importing = true } label: { Label(store.importing ? "モデルをコピー中…" : "GGUFモデルを追加", systemImage: "plus.circle") }
                         .disabled(store.importing || store.busy)
                     Button("モデルをメモリから解放", systemImage: "memorychip") { store.unloadModel() }.disabled(store.busy)
-                    Text("空きメモリを大幅に超えるモデルはiOSにキルされる可能性があります。M4 iPad Pro（16GB）では5〜9BのQ4量子化モデルが動作目安です。").font(.caption).foregroundStyle(.secondary)
+                    Text("モデル本体以外にコンテキスト・GPUバッファのメモリも必要です。利用可能メモリの90%以上のモデルは安全のため読み込みません。モデルごとの実機速度・最大サイズは未計測です。").font(.caption).foregroundStyle(.secondary)
                 }.disabled(store.busy)
 
                 Section("推論") {
@@ -54,7 +60,7 @@ struct SettingsScreen: View {
                         Text(String(format: "創造性（Temperature） %.2f", store.settings.temperature))
                         Slider(value: $store.settings.temperature, in: 0...1.5, step: 0.05)
                     }
-                    Text("CPUスレッドはMetal OFF時またはCPUオフロード層で使用されます。M4 iPad Proは10コア（パフォーマンス4＋効率6）。推論には4〜6が最適です。メモリ警告をOFFにすると大きいモデルを確認なしで読み込みます。設定変更は次の生成から反映されます。").font(.caption).foregroundStyle(.secondary)
+                    Text("この端末の利用可能CPU: \(ProcessInfo.processInfo.activeProcessorCount)コア。指定数は実際のコア数以内に制限します。M4 iPad Proは構成により9/10コアです。10スレッドが常に最速とは限らないため比較してください。MetalはGPU推論に使用し、Neural EngineやJITによる推論高速化は行いません。").font(.caption).foregroundStyle(.secondary)
                 }.disabled(store.busy)
 
                 Section {
@@ -75,12 +81,13 @@ struct SettingsScreen: View {
                 Section("データ") {
                     ShareLink(item: backup, preview: SharePreview("Kernelチャットバックアップ")) { Label("履歴をJSONで書き出す", systemImage: "square.and.arrow.up") }
                     Button("すべてのチャットを削除", role: .destructive) { clearHistory = true }.disabled(store.busy)
-                    Text("会話・モデル・メモリはこのiPadに保存されます。一時チャットは履歴に保存しません。").font(.caption).foregroundStyle(.secondary)
+                    Text("会話・モデル・メモリはこのiPadに保存されます。一時チャットは履歴に保存しません。API利用時は入力と指示・メモリ・添付抽出テキストが設定先へ送信されます。").font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Kernel 2.0") {
+                Section("Kernel 10 · Rebuild") {
                     Link("GitHub・ソースコード", destination: URL(string: "https://github.com/d51youkun/Kernel")!)
                     Link("IPAリリース", destination: URL(string: "https://github.com/d51youkun/Kernel/releases")!)
-                    Text("ローカル対応: チャット・履歴検索・プロジェクト・編集・再生成・分岐・共有・読み上げ・PDF/テキスト要約・画像OCR。クラウド検索、画像/動画生成、視覚モデル、コード実行、OpenAIのGPTs/連携サービスは搭載していません。").font(.caption).foregroundStyle(.secondary)
+                    Text("実装: ローカル/APIチャット、カスタム指示、手動メモリ、履歴検索、プロジェクト、編集、再生成、分岐、ファイル保存、HTML/JSプレビュー・Console、APIトークン連携、GitHubコミット、Cloudflare Worker公開、ショートカット起動、ウィジェット。未実装: ChatGPT独自のGPTs・Deep Research・画像/動画生成・リアルタイム音声会話・自動メモリ・Google OAuthログイン画面。PDFはテキスト抽出、画像はOCRです。APIトークン連携はOAuthログインではありません。").font(.caption).foregroundStyle(.secondary)
+                    Text("App ID: com.kernel.app.K5PVDY39NR").font(.caption.monospaced())
                 }
             }
             .navigationTitle("設定")
@@ -101,7 +108,7 @@ struct SettingsScreen: View {
             .confirmationDialog("すべてのチャットを削除しますか？", isPresented: $clearHistory, titleVisibility: .visible) {
                 Button("すべて削除", role: .destructive) { store.conversations = []; store.selectedID = nil; store.persist() }
             }
-        }.frame(minWidth: 500, minHeight: 600)
+        }
     }
     private var appearanceSection: some View {
         Section("表示・音声") {

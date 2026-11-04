@@ -2,14 +2,14 @@ name: KernelApp
 options:
   bundleIdPrefix: com.kernel
   deploymentTarget:
-    iOS: "17.4"
+    iOS: "18.0"
   createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.10"
     TARGETED_DEVICE_FAMILY: "2"
-    MARKETING_VERSION: "9.0.0"
-    CURRENT_PROJECT_VERSION: "9"
+    MARKETING_VERSION: "10.0.0"
+    CURRENT_PROJECT_VERSION: "10"
     CODE_SIGNING_ALLOWED: NO
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
@@ -23,7 +23,7 @@ targetTemplates:
     settings:
       base:
         PRODUCT_NAME: Kernel
-        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app.K5PVDY39NR
         INFOPLIST_FILE: KernelApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: KernelApp/KernelApp.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: KernelApp/Bridge/KernelApp-Bridging-Header.h
@@ -39,6 +39,8 @@ targets:
         embed: true
       - target: KernelDebugger
         embed: true
+      - target: KernelWidget
+        embed: true
     settings:
       base:
         HEADER_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64/llama.framework/Headers"
@@ -53,12 +55,23 @@ targets:
     settings:
       base:
         PRODUCT_NAME: KernelDebugger
-        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app.Debugger
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app.K5PVDY39NR.Debugger
         INFOPLIST_FILE: DebuggerExtension/Info.plist
         SWIFT_OBJC_BRIDGING_HEADER: DebuggerExtension/DebuggerExtension-Bridging-Header.h
         HEADER_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/KernelApp/Bridge"
         APPLICATION_EXTENSION_API_ONLY: YES
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+  KernelWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KernelWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kernel.app.K5PVDY39NR.Widget
+        INFOPLIST_FILE: KernelWidget/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
   KernelPreview:
     templates: [App]
     settings:

@@ -6,6 +6,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Kernel</string>
+	<key>CFBundleURLTypes</key>
+	<array><dict><key>CFBundleURLName</key><string>com.kernel.app.K5PVDY39NR</string><key>CFBundleURLSchemes</key><array><string>kernel</string></array></dict></array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

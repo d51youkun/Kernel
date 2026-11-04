@@ -67,7 +67,7 @@ struct WorkspaceView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "person.crop.circle.fill").font(.title)
                         VStack(alignment: .leading) {
-                            Text("ローカルワークスペース").font(.subheadline.weight(.medium))
+                            Text("あなたのワークスペース").font(.subheadline.weight(.medium))
                             Text("設定・モデル管理").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer(); Image(systemName: "gearshape")
@@ -137,10 +137,10 @@ private struct ChatScreen: View {
                 VStack(spacing: 18) {
                     Image(systemName: "circle.hexagongrid.fill").font(.system(size: 44, weight: .light))
                     Text("今日は何をお手伝いしましょうか？").font(.system(size: 29, weight: .semibold)).multilineTextAlignment(.center)
-                    Text(store.models.isEmpty ? "GGUFモデルを追加して、iPadの中でAIを動かしましょう。" : "あなたのモデル。あなたのiPad。会話はこのデバイスの中に。")
+                    Text(store.workspace.provider == "local" ? "GGUFモデルで、iPadの中にあなただけのAIを。" : "APIにつないで、アイデアを形に。")
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    if store.models.isEmpty {
-                        Button("モデルを追加", systemImage: "plus") { store.showSettings = true }.buttonStyle(.borderedProminent)
+                    if store.models.isEmpty && store.workspace.provider == "local" {
+                        Button("モデル・APIを設定", systemImage: "plus") { store.showSettings = true }.buttonStyle(.borderedProminent)
                     } else {
                         ViewThatFits {
                             HStack { suggestions }
@@ -162,7 +162,7 @@ private struct ChatScreen: View {
                     Divider()
                     Button("モデルを管理…", systemImage: "slider.horizontal.3") { store.showSettings = true }
                 } label: {
-                    HStack(spacing: 6) { Text(store.selectedModel?.displayName ?? "Kernel").font(.headline); Image(systemName: "chevron.down").font(.caption) }
+                    HStack(spacing: 6) { Text(store.workspace.provider == "local" ? (store.selectedModel?.displayName ?? "Kernel") : store.workspace.apiModel).font(.headline); Image(systemName: "chevron.down").font(.caption) }
                 }.disabled(store.busy)
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -191,6 +191,7 @@ private struct ChatScreen: View {
             }
         }
         .onChange(of: voice.transcript) { _, value in draft = value }
+        .onChange(of: store.shortcutDraft) { _, value in draft = value; focused = true }
         .onChange(of: voice.error) { _, value in if let value { store.error = value } }
         .onDisappear { voice.stop() }
         .sheet(item: $editMessage) { message in
@@ -278,7 +279,12 @@ private struct MessageCard: View {
             } else {
                 if message.content.isEmpty { ProgressView().padding(.vertical) }
                 else { RichMessage(text: message.content) }
-                if message.interrupted { Label("生成が中断されました", systemImage: "pause.circle").font(.caption).foregroundStyle(.secondary) }
+                if message.interrupted {
+                    Label("生成が中断されました", systemImage: "pause.circle").font(.caption).foregroundStyle(.secondary)
+                }
+                if !store.busy, store.current?.messages.last?.id == message.id {
+                    Button("続きを生成", systemImage: "arrow.right.circle") { store.continueResponse() }.font(.caption)
+                }
             }
             if !message.content.isEmpty {
                 HStack(spacing: 18) {
@@ -303,22 +309,12 @@ private struct MessageCard: View {
 struct RichMessage: View {
     let text: String
     var body: some View {
-        let parts = text.components(separatedBy: "```")
+        let parts = CodeDocument.segments(text)
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
-                if index % 2 == 1 {
-                    let lines = part.split(separator: "\n", omittingEmptySubsequences: false)
-                    let language = String(lines.first ?? "code")
-                    let code = lines.dropFirst().joined(separator: "\n")
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text(language.isEmpty ? "code" : language).font(.caption)
-                            Spacer()
-                            Button { UIPasteboard.general.string = code } label: { Label("コピー", systemImage: "doc.on.doc").font(.caption) }
-                        }.padding(12).background(Color.primary.opacity(0.07))
-                        ScrollView(.horizontal) { Text(code).font(.system(.subheadline, design: .monospaced)).textSelection(.enabled).padding(16) }
-                    }.background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12)).clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
+            ForEach(Array(parts.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .code(let code): CodeArtifactView(code: code)
+                case .prose(let part):
                     // Preserve paragraph/list layout and render inline Markdown within each line.
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(part.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in

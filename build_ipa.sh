@@ -1,78 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-echo "=== 🚀 Building Kernel for iPadOS (JIT Ready) ==="
-
-# 1. Xcode のパス設定
-export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
-
-# 2. xcodegen が無ければローカルポータブルバイナリを使用
-if command -v xcodegen &> /dev/null; then
-    XCODEGEN="xcodegen"
-elif [ -f ".tools/xcodegen/bin/xcodegen" ]; then
-    XCODEGEN=".tools/xcodegen/bin/xcodegen"
-else
-    echo "⬇️  Downloading portable XcodeGen..."
-    mkdir -p .tools
-    curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o .tools/xcodegen.zip
-    unzip -q .tools/xcodegen.zip -d .tools/
-    rm .tools/xcodegen.zip
-    XCODEGEN=".tools/xcodegen/bin/xcodegen"
-fi
-
-# 3. llama.xcframework が無ければダウンロード
-if [ ! -d "Frameworks/llama.xcframework" ]; then
-    echo "⬇️  Downloading official llama.xcframework..."
-    mkdir -p Frameworks
-    curl -L https://github.com/ggml-org/llama.cpp/releases/download/b10549/llama-b10549-xcframework.zip -o Frameworks/llama-xcframework.zip
-    unzip -q Frameworks/llama-xcframework.zip -d Frameworks/
-    mv Frameworks/build-apple/llama.xcframework Frameworks/
-    rm -rf Frameworks/build-apple Frameworks/llama-xcframework.zip
-fi
-
-# 4. Xcode プロジェクト生成
-echo "⚙️  Generating Xcode project..."
-"$XCODEGEN" generate --spec project.yml
-
-# 5. Swift Macro プラグインパスを解決
-#    Xcode 27 のコマンドラインビルドでは swift-plugin-server が動かないため
-#    -load-plugin-library で dylib を直接ロードする
-MACRO_PLUGIN_DIR="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
-MACRO_FLAGS="-load-plugin-library ${MACRO_PLUGIN_DIR}/libSwiftUIMacros.dylib"
-MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libObservationMacros.dylib"
-MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libFoundationMacros.dylib"
-if [ -f "${MACRO_PLUGIN_DIR}/libSwiftDataMacros.dylib" ]; then
-    MACRO_FLAGS+=" -load-plugin-library ${MACRO_PLUGIN_DIR}/libSwiftDataMacros.dylib"
-fi
-
-# 6. ビルド
-echo "🔨 Compiling Release build..."
-"$DEVELOPER_DIR/usr/bin/xcodebuild" build \
-    -project KernelApp.xcodeproj \
-    -scheme KernelApp \
-    -sdk iphoneos \
-    -derivedDataPath ./build/DerivedData \
-    -configuration Release \
-    OTHER_SWIFT_FLAGS="$MACRO_FLAGS" \
-    CODE_SIGN_IDENTITY="" \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGNING_ALLOWED=NO
-
-# 7. 署名 & IPA パッケージング
-echo "📦 Signing with get-task-allow entitlement & packaging IPA..."
-APP_PATH="./build/DerivedData/Build/Products/Release-iphoneos/Kernel.app"
-rm -rf Payload Kernel.ipa
-mkdir -p Payload
-cp -R "$APP_PATH" Payload/
-xattr -cr Payload/Kernel.app
-codesign -s - --force --entitlements KernelApp/KernelApp.entitlements Payload/Kernel.app
-zip -qr Kernel.ipa Payload/
-rm -rf Payload
-
-echo "========================================="
-echo "🎉 SUCCESS! IPA created at:"
-echo "   $SCRIPT_DIR/Kernel.ipa ($(du -sh Kernel.ipa | cut -f1))"
-echo "========================================="
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+python3 scripts/prepare_dependencies.py
+xcodegen generate --spec project.yml
+DERIVED="${KERNEL_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/KernelRebuild}"
+STAGING="$(mktemp -d "${TMPDIR:-/tmp}/kernel-ipa.XXXXXX")"
+trap 'rm -rf "$STAGING"' EXIT
+DEVDIR="$(xcode-select -p)"
+MACRO_DIR="$DEVDIR/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
+MACRO_FLAGS=""
+for lib in libSwiftUIMacros libObservationMacros libFoundationMacros; do
+    if [ -f "$MACRO_DIR/$lib.dylib" ]; then MACRO_FLAGS="$MACRO_FLAGS -load-plugin-library $MACRO_DIR/$lib.dylib"; fi
+done
+xcodebuild build -project KernelApp.xcodeproj -scheme KernelApp -sdk iphoneos \
+    -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" -configuration Release \
+    OTHER_SWIFT_FLAGS="$MACRO_FLAGS" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+mkdir -p "$STAGING/Payload"
+ditto "$DERIVED/Build/Products/Release-iphoneos/Kernel.app" "$STAGING/Payload/Kernel.app"
+xattr -cr "$STAGING/Payload/Kernel.app"
+while IFS= read -r -d '' framework; do codesign --force --sign - "$framework"; done < <(find "$STAGING/Payload/Kernel.app" -type d -name '*.framework' -print0)
+while IFS= read -r -d '' extension; do codesign --force --sign - "$extension"; done < <(find "$STAGING/Payload/Kernel.app/PlugIns" -type d -name '*.appex' -print0)
+codesign --force --sign - --entitlements KernelApp/KernelApp.entitlements "$STAGING/Payload/Kernel.app"
+codesign --verify --deep --strict "$STAGING/Payload/Kernel.app"
+OUTPUT="${KERNEL_IPA_OUTPUT:-$ROOT/Kernel.ipa}"
+ditto -c -k --keepParent "$STAGING/Payload" "$OUTPUT"
+echo "IPA created: $OUTPUT"
+echo "Ad-hoc signed for re-signing/sideloading; not a provisioned installation IPA. JIT is not verified."

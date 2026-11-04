@@ -12,3 +12,7 @@ Pods/
 
 # Large prebuilt frameworks (auto-downloaded by build_ipa.sh & GitHub Actions)
 Frameworks/
+.build/
+.swiftpm/
+.wrangler/
+**/xcuserdata/

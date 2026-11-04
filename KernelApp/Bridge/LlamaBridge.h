@@ -9,6 +9,7 @@ typedef void (^LlamaTokenCallback)(NSString * _Nullable piece,
 @interface LlamaBridge : NSObject
 
 @property (nonatomic, readonly) BOOL isModelLoaded;
+@property (atomic, readonly) BOOL reachedTokenLimit;
 @property (nonatomic, readonly, nullable) NSString *modelDescription;
 
 @property (nonatomic, assign) int32_t contextLength;
@@ -28,6 +29,7 @@ typedef void (^LlamaTokenCallback)(NSString * _Nullable piece,
 - (void)generateFromMessages:(NSArray<NSDictionary<NSString *, NSString *> *> *)messages
                tokenCallback:(LlamaTokenCallback)callback;
 - (void)cancelGeneration;
+- (void)waitUntilIdle:(void (^)(void))completion;
 
 @end
 

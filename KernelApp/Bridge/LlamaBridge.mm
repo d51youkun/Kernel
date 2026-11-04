@@ -23,6 +23,7 @@ static NSError *failure(NSString *text) {
 }
 @synthesize contextLength = _contextLength, nGpuLayers = _nGpuLayers, nThreads = _nThreads, temperature = _temperature;
 @synthesize topK = _topK, topP = _topP, maxNewTokens = _maxNewTokens;
+@synthesize reachedTokenLimit = _reachedTokenLimit;
 
 + (void)initializeBackend {
 #if !TARGET_OS_SIMULATOR
@@ -94,9 +95,11 @@ static NSError *failure(NSString *text) {
     dispatch_sync(_queue, ^{ [self releaseModel]; });
 }
 - (void)cancelGeneration { _cancel = true; }
+- (void)waitUntilIdle:(void (^)(void))completion { dispatch_async(_queue, completion); }
 - (void)generateFromMessages:(NSArray<NSDictionary<NSString *,NSString *> *> *)messages tokenCallback:(LlamaTokenCallback)callback {
     _cancel = false;
     // Capture an immutable configuration snapshot before entering the worker queue.
+    _reachedTokenLimit = NO;
     const float temp = _temperature, topP = _topP;
     const int topK = _topK, limit = _maxNewTokens;
     dispatch_async(_queue, ^{
@@ -142,7 +145,8 @@ static NSError *failure(NSString *text) {
                     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
                 }
                 std::string pending;
-                for (int i = 0; i < std::min(limit, ctx - count) && !self->_cancel; ++i) {
+                const int outputLimit = std::min(limit, ctx - count);
+                for (int i = 0; i < outputLimit && !self->_cancel; ++i) {
                     llama_token token = llama_sampler_sample(sampler, self->_ctx, -1);
                     if (llama_vocab_is_eog(vocab, token)) break;
                     std::vector<char> piece(256);
@@ -151,6 +155,7 @@ static NSError *failure(NSString *text) {
                     if (length > 0) pending.append(piece.data(), length);
                     NSString *text = [[NSString alloc] initWithBytes:pending.data() length:pending.size() encoding:NSUTF8StringEncoding];
                     if (text) { if (text.length) callback(text, NO, nil); pending.clear(); }
+                    if (i + 1 == outputLimit) self->_reachedTokenLimit = YES;
                     if (i + 1 < limit && count + i + 1 < ctx) {
                         auto batch = llama_batch_get_one(&token, 1);
                         if (llama_decode(self->_ctx, batch) != 0 && !self->_cancel) throw std::runtime_error("回答の生成に失敗しました。");
